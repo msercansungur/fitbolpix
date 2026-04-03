@@ -47,6 +47,21 @@ export function useSimulator() {
     setState(INITIAL_STATE);
   }, []);
 
+  // Atomically set both teams and kick off — used when navigating from Fixtures
+  const setTeamsAndStart = useCallback((home: Team, away: Team) => {
+    const allEvents = simulateMatch(home, away, 'en');
+    setState({
+      homeTeam: home,
+      awayTeam: away,
+      homeScore: 0,
+      awayScore: 0,
+      events: [],
+      pendingEvents: allEvents,
+      currentMinute: 0,
+      status: 'running',
+    });
+  }, []);
+
   // Drive the playback: reveal one event at a time on an interval
   useEffect(() => {
     if (state.status !== 'running') return;
@@ -81,5 +96,5 @@ export function useSimulator() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status]);
 
-  return { state, selectHomeTeam, selectAwayTeam, startMatch, resetMatch };
+  return { state, selectHomeTeam, selectAwayTeam, startMatch, resetMatch, setTeamsAndStart };
 }

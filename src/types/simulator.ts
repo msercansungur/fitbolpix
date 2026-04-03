@@ -15,6 +15,7 @@ export interface Team {
   name: string;
   flag: string;
   strength: number; // 0–100
+  group: string;    // 'A'–'L'
 }
 
 export interface MatchEvent {

@@ -8,10 +8,14 @@ import {
   SafeAreaView,
   ListRenderItem,
 } from 'react-native';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useSimulator } from '../hooks/useSimulator';
-import { NATIONS } from '../constants/nations';
+import { NATIONS, NATIONS_BY_ID } from '../constants/nations';
 import { COLORS, SPACING, FONT_SIZE } from '../constants/theme';
 import { MatchEvent, Team, EventType } from '../types/simulator';
+import { BottomTabParamList } from '../navigation/BottomTabNavigator';
+
+type Props = BottomTabScreenProps<BottomTabParamList, 'Simulator'>;
 
 // ─── Event icons ─────────────────────────────────────────────────────────────
 
@@ -115,9 +119,22 @@ function EventItem({ event, homeId }: { event: MatchEvent; homeId: string }) {
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
-export default function SimulatorScreen() {
-  const { state, selectHomeTeam, selectAwayTeam, startMatch, resetMatch } = useSimulator();
+export default function SimulatorScreen({ route }: Props) {
+  const { state, selectHomeTeam, selectAwayTeam, startMatch, resetMatch, setTeamsAndStart } = useSimulator();
   const feedRef = useRef<FlatList<MatchEvent>>(null);
+
+  // When navigated from Fixtures with pre-selected teams, kick off immediately
+  useEffect(() => {
+    const homeId = route.params?.homeTeamId;
+    const awayId = route.params?.awayTeamId;
+    if (homeId && awayId) {
+      const home = NATIONS_BY_ID[homeId];
+      const away = NATIONS_BY_ID[awayId];
+      if (home && away) setTeamsAndStart(home, away);
+    }
+  // Depend on the ID strings so re-navigation with different teams fires again
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.homeTeamId, route.params?.awayTeamId]);
 
   // Auto-scroll event feed to the latest event
   useEffect(() => {

@@ -9,7 +9,7 @@ import CollectionScreen from '../screens/CollectionScreen';
 export type BottomTabParamList = {
   Home: undefined;
   Fixtures: undefined;
-  Simulator: undefined;
+  Simulator: { homeTeamId: string; awayTeamId: string } | undefined;
   Tournament: undefined;
   Collection: undefined;
 };
