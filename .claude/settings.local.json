@@ -4,7 +4,9 @@
       "Bash(npx:*)",
       "Bash(cp:*)",
       "Bash(npm install:*)",
-      "WebFetch(domain:en.wikipedia.org)"
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:en.m.wikipedia.org)",
+      "WebSearch"
     ]
   }
 }

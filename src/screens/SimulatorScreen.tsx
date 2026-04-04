@@ -14,6 +14,7 @@ import { NATIONS, NATIONS_BY_ID } from '../constants/nations';
 import { COLORS, SPACING, FONT_SIZE } from '../constants/theme';
 import { MatchEvent, Team, EventType } from '../types/simulator';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
+import { useMatchStore } from '../store/useMatchStore';
 
 type Props = BottomTabScreenProps<BottomTabParamList, 'Simulator'>;
 
@@ -121,7 +122,10 @@ function EventItem({ event, homeId }: { event: MatchEvent; homeId: string }) {
 
 export default function SimulatorScreen({ route }: Props) {
   const { state, selectHomeTeam, selectAwayTeam, startMatch, resetMatch, setTeamsAndStart } = useSimulator();
+  const saveResult = useMatchStore((s) => s.saveResult);
   const feedRef = useRef<FlatList<MatchEvent>>(null);
+
+  const fixtureId = route.params?.fixtureId;
 
   // When navigated from Fixtures with pre-selected teams, kick off immediately
   useEffect(() => {
@@ -135,6 +139,24 @@ export default function SimulatorScreen({ route }: Props) {
   // Depend on the ID strings so re-navigation with different teams fires again
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.params?.homeTeamId, route.params?.awayTeamId]);
+
+  // Save result to store when match reaches FULLTIME
+  useEffect(() => {
+    if (state.status !== 'finished') return;
+    if (!state.homeTeam || !state.awayTeam) return;
+
+    saveResult({
+      fixtureId: fixtureId ?? `adhoc-${state.homeTeam.id}-${state.awayTeam.id}-${Date.now()}`,
+      homeTeamId: state.homeTeam.id,
+      awayTeamId: state.awayTeam.id,
+      homeScore: state.homeScore,
+      awayScore: state.awayScore,
+      events: state.events,
+      simulatedAt: Date.now(),
+    });
+  // Only fire once per status transition to 'finished'
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status]);
 
   // Auto-scroll event feed to the latest event
   useEffect(() => {

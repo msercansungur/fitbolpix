@@ -108,11 +108,57 @@ fitbolpix/
 - Located: `src/utils/memeCommentary.ts`
 
 ## State Management (Zustand)
+- **matchStore** (`src/store/useMatchStore.ts`): all simulated match results, live group standings, and knockout results
 - **tournamentStore**: current tournament run, selected nation, group results, bracket state
 - **collectionStore**: owned player cards, pack count, coin balance, pack open history
 - **settingsStore**: language (tr/en), sound on/off, ad preference
 
 All stores persist to AsyncStorage via Zustand `persist` middleware.
+
+### matchStore — key details
+- `results: Record<fixtureId, MatchResult>` — stores full event log + score per fixture
+- `standings: Record<teamId, TeamStanding>` — rebuilt from scratch on every `saveResult` call to prevent double-counting on re-simulate
+- `knockoutResults: Record<matchId, KnockoutResult>` — keyed by numeric match ID (73–104); written by `saveKnockoutResult()`; cleared in bulk by `clearAllKnockoutResults()`
+- Standings are only recalculated for fixture IDs present in `GROUP_FIXTURES` (guards against ad-hoc matches polluting group tables)
+- `selectStandings(standings, group)` returns 4 rows sorted: Pts → GD → GF → teamId
+- `fixtureId` bridge: navigation params `{ homeTeamId, awayTeamId, fixtureId? }` link a Fixtures card to its saved result. Ad-hoc matches get an `adhoc-{home}-{away}-{ts}` key. Knockout simulate navigations use `fixtureId: 'ko-{matchId}'`.
+- `SimulatorScreen` saves on `status === 'finished'` via `useEffect` on `state.status`
+
+## Knockout Stage System
+
+### Types — `src/types/knockout.ts`
+- `KnockoutRound`: `'R32' | 'R16' | 'QF' | 'SF' | '3rd' | 'Final'`
+- `SlotSource`: discriminated union describing where a team comes from:
+  - `{ kind: 'group', position: 1|2, group }` — group winner or runner-up
+  - `{ kind: 'third_variable', slot: number }` — one of 8 best 3rd-placers, slot resolved at runtime
+  - `{ kind: 'winner'|'loser', matchId: number }` — winner/loser of a prior knockout match
+- `KnockoutMatchDef`: static bracket definition `{ id, round, homeSource, awaySource, date, venue }`
+- `KnockoutResult`: same shape as `MatchResult` but keyed by numeric `matchId`
+- `ResolvedKnockoutMatch`: runtime `{ def, homeTeamId: string|null, awayTeamId: string|null, result: KnockoutResult|null }`
+
+### Constants — `src/constants/knockoutBracket.ts`
+- `KNOCKOUT_MATCHES`: 32 match definitions, IDs 73–104, with real WC2026 dates/venues
+- `THIRD_SLOT_ELIGIBLE`: eligibility map `Record<slotMatchId, string[]>` — which groups' 3rd-placers can fill each variable slot (8 slots: 74, 77, 79, 80, 81, 82, 85, 87)
+- `R32_ORDER`, `R16_ORDER`, `QF_ORDER`, `SF_ORDER`, `ROUND_ORDERS` — display order arrays for `KnockoutBracket` columns
+
+### Engine — `src/utils/knockoutEngine.ts`
+- `getGroupThirdPlacer(group, standings, results)` — returns 3rd-place team for a completed group, or null
+- `getBestThirdPlacers(standings, results)` — collects 3rd-placers from all 12 groups; returns top 8 sorted by Pts→GD→GF→group, or null if fewer than 8 complete groups
+- `assignThirdPlacerSlots(qualifyingGroups)` — backtracking bipartite matching assigning 8 qualifying groups to the 8 variable slots respecting `THIRD_SLOT_ELIGIBLE`; returns `Record<slotId, group>` or null
+- `resolveKnockoutBracket(standings, results, knockoutResults)` — main function; processes matches 73→104 in order so dependencies always resolve before they are needed; returns `ResolvedKnockoutMatch[]`
+
+### Component — `src/components/KnockoutBracket.tsx`
+- Horizontal `ScrollView` with one `BracketColumn` per round (R32→R16→QF→SF→Final)
+- Cards are 168×72px, positioned absolutely within columns using growing vertical gaps so pairs align across rounds
+- Third-place match rendered in a separate row below the bracket, aligned under the SF column
+- Each `KnockoutMatchCard` shows: round accent, match number, team flags + names, score or "vs", ⚡ quick-sim and ▶/↺ simulate buttons (buttons hidden until both teams are known)
+
+### FixturesScreen knockout integration
+- `ViewMode` = `'groups' | 'knockout' | 'matchdays'`; tab bar hidden in knockout mode
+- `handleKnockoutQuickSim(match)` — calls `simulateMatch` + `computeScore` synchronously; if draw, home gets +1 (no extra time)
+- `handleKnockoutSimulate(match)` — navigates to SimulatorScreen with `fixtureId: 'ko-{matchId}'`; SimulatorScreen saves via `saveKnockoutResult` when it detects a `ko-` prefix
+- `resolvedBracket` is recomputed on every render from `resolveKnockoutBracket(standings, results, knockoutResults)`
+- `refreshKey` counter state forces ScrollView subtree remount on refresh tap (fixes React 18 `Object.is` bailout when same state value is set)
 
 ## Data Flow
 ```
