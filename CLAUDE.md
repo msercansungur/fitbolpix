@@ -160,6 +160,60 @@ All stores persist to AsyncStorage via Zustand `persist` middleware.
 - `resolvedBracket` is recomputed on every render from `resolveKnockoutBracket(standings, results, knockoutResults)`
 - `refreshKey` counter state forces ScrollView subtree remount on refresh tap (fixes React 18 `Object.is` bailout when same state value is set)
 
+## Penalty Shootout System
+
+### Types — `src/types/penalty.ts`
+- `GoalZone`: `0–8` (3×3 grid, row-major: 0=top-left, 8=bottom-right)
+- `ShotTechnique`: `'regular' | 'power' | 'panenka'`
+- `GKDive`: `{ direction: 'left'|'center'|'right', height: 'high'|'low' }`
+- `ShotOutcome`: `'goal' | 'saved' | 'miss'`
+- `ShotInput`: `{ zone, power: 0–100, accuracy: 0–100, technique }`
+- `KickRecord`: `{ teamId, outcome: ShotOutcome | null }`
+- `ShootoutMode`: `'best_of_5' | 'sudden_death'`
+- `ShootoutPhase`: `'mode_select' | 'team_select' | 'kicking' | 'finished'`
+- `KickPhase`: `'technique_select' | 'aiming' | 'power' | 'accuracy' | 'resolving' | 'cpu_kicking'`
+- `ShootoutState`: full state machine snapshot including teams, scores, kicks, phases, pendingShot, lastKickResult
+
+### Team ratings — `src/types/simulator.ts` + `src/constants/nations.ts`
+- `penalty_skill?: number` — 0–100: higher = slower accuracy ring = easier timing for player
+- `goalkeeper_rating?: number` — 0–100: higher = better penalty saves
+- Notable values: Türkiye=77, England=52 (notorious penalty history), Argentina=90, Germany=85
+- `getRingDuration(penaltySkill)` → `900 + skill * 13` ms (range 900ms–2200ms full cycle)
+
+### Engine — `src/utils/penaltyEngine.ts`
+- `getRingDuration(penaltySkill)` — returns accuracy ring oscillation cycle ms
+- `generateGKDive(gkRating)` — weighted random GK dive; higher rating = higher chance of staying center
+- `resolveUserShot(shot, gkDive, gkRating)` — outcome logic:
+  - accuracy < 20 → always miss
+  - power < 15 → near-certain save
+  - Panenka + GK dives → always goal; GK stays center → save prob = `gkRating * 0.5 / 100`
+  - GK correct column: save prob = `0.25 + (gkRating/100)*0.5` (+ 0.10 if height matches)
+  - GK wrong column: save prob = 0.03; power shot reduces save prob by 30%; accuracy>80 reduces by 20%
+- `resolveCPUShot(penaltySkill, gkRating)` — auto CPU kick; goal prob = `0.55 + (skill/100)*0.35`
+- `checkShootoutEnd(kicks, mode, homeId, awayId)` — checks early-finish and final conditions
+- `getPenaltyCommentary(outcome, technique, lang)` — 30+ meme lines per outcome×technique combo, TR + EN
+
+### Components — `src/components/penalty/`
+- `GoalView` — pixel art goal with crowd stands, ad boards, GK sprite, net, ball animation; shows outcome overlay
+- `AimOverlay` — 3×3 `TouchableOpacity` grid overlaid on goal; highlights selected zone
+- `PowerBar` — hold-and-release vertical bar; fill color green→yellow→red; locks power on release (max 1500ms)
+- `AccuracyRing` — `Animated.loop` shrinking ring; tap to freeze; accuracy = 100 - (currentRadius/maxRadius)*100
+- `ScoreTracker` — top bar with team flags, kick dot history (●=goal, ✕=miss, ○=pending), live score
+
+### Screen — `src/screens/PenaltyScreen.tsx`
+State machine with 4 top-level phases:
+1. `mode_select` — user picks Best of 5 or Sudden Death
+2. `team_select` — user picks home + away from full 48-nation list
+3. `kicking` — alternating turns; user kicks = technique→aim→power→accuracy→resolving; CPU = auto-resolve after 1200ms delay
+4. `finished` — result screen with winner, final score, Play Again / Back
+
+Kick ordering: home always kicks first in each round; sudden death activates after round 5 if tied.
+Navigation params `{ homeTeamId?, awayTeamId? }` skip mode/team select if provided (e.g. from SimulatorScreen after fulltime).
+
+### Navigation
+`Penalty: { homeTeamId?: string; awayTeamId?: string } | undefined` in `BottomTabParamList`.
+Penalty is the 4th tab (between Simulator and Tournament).
+
 ## Data Flow
 ```
 API-Football → useFixtures (hook) → FixturesScreen

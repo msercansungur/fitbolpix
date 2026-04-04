@@ -14,8 +14,10 @@ export interface Team {
   id: string;
   name: string;
   flag: string;
-  strength: number; // 0–100
-  group: string;    // 'A'–'L'
+  strength: number;          // 0–100
+  group: string;             // 'A'–'L'
+  penalty_skill?: number;    // 0–100: higher = slower accuracy ring = easier timing
+  goalkeeper_rating?: number; // 0–100: higher = better penalty saves
 }
 
 export interface MatchEvent {

@@ -6,7 +6,10 @@
       "Bash(npm install:*)",
       "WebFetch(domain:en.wikipedia.org)",
       "WebFetch(domain:en.m.wikipedia.org)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(python3 -c ':*)",
+      "Bash(npx expo:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
