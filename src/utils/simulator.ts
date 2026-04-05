@@ -40,16 +40,26 @@ function randomMinutes(count: number, min: number, max: number): number[] {
   return result.sort((a, b) => a - b);
 }
 
+// Elo win probability: probability that team A beats team B
+// Standard formula: 1 / (1 + 10^((eloB - eloA) / 400))
+function eloWinProb(eloA: number, eloB: number): number {
+  return 1 / (1 + Math.pow(10, (eloB - eloA) / 400));
+}
+
 export function simulateMatch(home: Team, away: Team, lang: Lang = 'en'): MatchEvent[] {
   const pool: MatchEvent[] = [];
 
-  // Expected goals — weighted by relative strength, avg ~2.5 goals per match
-  const total = home.strength + away.strength;
-  const homeLambda = (home.strength / total) * 2.8;
-  const awayLambda = (away.strength / total) * 2.8;
+  // Elo-based expected goals using real Elo win probability.
+  // WC average ~2.7 goals/game → 1.35 each at equal strength.
+  // λ = 1.35 * (2 * winProb) so that at 50/50 each team gets λ=1.35,
+  // and a heavy favourite (winProb→1) gets λ→2.70 while the underdog gets λ→0.
+  const winProbHome = eloWinProb(home.strength, away.strength);
+  const winProbAway = 1 - winProbHome;
+  const homeLambda = 1.35 * (2 * winProbHome);
+  const awayLambda = 1.35 * (2 * winProbAway);
 
-  const homeGoals = Math.min(poisson(homeLambda), 7);
-  const awayGoals = Math.min(poisson(awayLambda), 7);
+  const homeGoals = Math.min(poisson(homeLambda), 6);
+  const awayGoals = Math.min(poisson(awayLambda), 6);
 
   // Goals (can happen in injury time up to 95')
   randomMinutes(homeGoals, 1, 95).forEach((m) =>

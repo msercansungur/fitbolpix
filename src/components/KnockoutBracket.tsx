@@ -14,8 +14,8 @@ import { KNOCKOUT_MATCHES, ROUND_ORDERS } from '../constants/knockoutBracket';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BracketActions {
-  onQuickSim: (match: ResolvedKnockoutMatch) => void;
-  onSimulate: (match: ResolvedKnockoutMatch) => void;
+  onQuickSim?: (match: ResolvedKnockoutMatch) => void;
+  onSimulate?: (match: ResolvedKnockoutMatch) => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -66,8 +66,8 @@ function KnockoutMatchCard({
   onSimulate,
 }: {
   match: ResolvedKnockoutMatch;
-  onQuickSim: () => void;
-  onSimulate: () => void;
+  onQuickSim?: () => void;
+  onSimulate?: () => void;
 }) {
   const { def, homeTeamId, awayTeamId, result } = match;
   const bothKnown = homeTeamId !== null && awayTeamId !== null;
@@ -107,25 +107,29 @@ function KnockoutMatchCard({
           <TeamSlot teamId={awayTeamId} winner={awayWinner} />
         </View>
 
-        {/* Action buttons */}
-        {bothKnown && (
+        {/* Action buttons — only rendered when callbacks are provided (Simulator tab) */}
+        {bothKnown && (onQuickSim || onSimulate) && (
           <View style={styles.cardActions}>
-            <TouchableOpacity
-              style={styles.quickSimBtn}
-              onPress={onQuickSim}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.quickSimBtnText}>⚡</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.simBtn, isPlayed && styles.simBtnPlayed]}
-              onPress={onSimulate}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.simBtnText, isPlayed && styles.simBtnTextPlayed]}>
-                {isPlayed ? '↺' : '▶'}
-              </Text>
-            </TouchableOpacity>
+            {onQuickSim && (
+              <TouchableOpacity
+                style={styles.quickSimBtn}
+                onPress={onQuickSim}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.quickSimBtnText}>⚡</Text>
+              </TouchableOpacity>
+            )}
+            {onSimulate && (
+              <TouchableOpacity
+                style={[styles.simBtn, isPlayed && styles.simBtnPlayed]}
+                onPress={onSimulate}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.simBtnText, isPlayed && styles.simBtnTextPlayed]}>
+                  {isPlayed ? '↺' : '▶'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -139,12 +143,12 @@ function BracketColumn({
   round,
   matches,
   resolvedMap,
-  actions,
+  actions = {},
 }: {
   round: KnockoutRound;
   matches: number[];
   resolvedMap: Map<number, ResolvedKnockoutMatch>;
-  actions: BracketActions;
+  actions?: BracketActions;
 }) {
   const label = ROUND_LABELS[round];
   const accent = ROUND_ACCENT[round];
@@ -182,8 +186,8 @@ function BracketColumn({
             <View key={matchId} style={[styles.cardWrap, { top }]}>
               <KnockoutMatchCard
                 match={match}
-                onQuickSim={() => actions.onQuickSim(match)}
-                onSimulate={() => actions.onSimulate(match)}
+                onQuickSim={actions.onQuickSim ? () => actions.onQuickSim!(match) : undefined}
+                onSimulate={actions.onSimulate ? () => actions.onSimulate!(match) : undefined}
               />
             </View>
           );
@@ -197,8 +201,8 @@ function BracketColumn({
 
 interface KnockoutBracketProps {
   resolved: ResolvedKnockoutMatch[];
-  onQuickSim: (match: ResolvedKnockoutMatch) => void;
-  onSimulate: (match: ResolvedKnockoutMatch) => void;
+  onQuickSim?: (match: ResolvedKnockoutMatch) => void;
+  onSimulate?: (match: ResolvedKnockoutMatch) => void;
 }
 
 export default function KnockoutBracket({ resolved, onQuickSim, onSimulate }: KnockoutBracketProps) {
@@ -248,8 +252,8 @@ export default function KnockoutBracket({ resolved, onQuickSim, onSimulate }: Kn
           </Text>
           <KnockoutMatchCard
             match={thirdMatch}
-            onQuickSim={() => actions.onQuickSim(thirdMatch)}
-            onSimulate={() => actions.onSimulate(thirdMatch)}
+            onQuickSim={actions.onQuickSim ? () => actions.onQuickSim!(thirdMatch) : undefined}
+            onSimulate={actions.onSimulate ? () => actions.onSimulate!(thirdMatch) : undefined}
           />
         </View>
       )}

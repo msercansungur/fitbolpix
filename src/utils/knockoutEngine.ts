@@ -53,7 +53,7 @@ export function getBestThirdPlacers(
 
   if (allThirds.length < 8) return null; // need all 12 groups done to pick best 8
 
-  // Rank by: points → GD → GF → group letter (stable)
+  // Rank by: points → GD → GF → group letter (deterministic, stable)
   allThirds.sort((a, b) => {
     const sa = a.standing;
     const sb = b.standing;
@@ -62,7 +62,8 @@ export function getBestThirdPlacers(
     const gdA = sa.goalsFor - sa.goalsAgainst;
     if (gdB !== gdA) return gdB - gdA;
     if (sb.goalsFor !== sa.goalsFor) return sb.goalsFor - sa.goalsFor;
-    return a.group.localeCompare(b.group);
+    if (sb.goalsAgainst !== sa.goalsAgainst) return sa.goalsAgainst - sb.goalsAgainst; // fewer GA better
+    return a.group.localeCompare(b.group); // absolute deterministic tiebreaker
   });
 
   return allThirds.slice(0, 8);
@@ -99,7 +100,18 @@ export function assignThirdPlacerSlots(
     return false;
   }
 
-  return backtrack(0) ? assignment : null;
+  if (backtrack(0)) return assignment;
+
+  // Fallback: greedy assign ignoring eligibility constraints.
+  // Guarantees we never return null — bracket always resolves.
+  console.warn('[KO] assignThirdPlacerSlots: backtracking failed, using greedy fallback');
+  const fallback: Record<number, string> = {};
+  const remaining = [...qualifyingGroups];
+  for (const slotId of VARIABLE_SLOTS) {
+    if (remaining.length === 0) break;
+    fallback[slotId] = remaining.shift()!;
+  }
+  return fallback;
 }
 
 // ─── Main resolution function ─────────────────────────────────────────────────

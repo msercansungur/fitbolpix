@@ -14,7 +14,7 @@ export interface Team {
   id: string;
   name: string;
   flag: string;
-  strength: number;          // 0–100
+  strength: number;          // ELO rating (~1279–1877)
   group: string;             // 'A'–'L'
   penalty_skill?: number;    // 0–100: higher = slower accuracy ring = easier timing
   goalkeeper_rating?: number; // 0–100: higher = better penalty saves
