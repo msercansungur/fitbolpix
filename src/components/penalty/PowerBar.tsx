@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
-import { COLORS, SPACING, FONT_SIZE } from '../../constants/theme';
+import { COLORS, SPACING } from '../../constants/theme';
 
 const BAR_H      = 160;
 const BAR_W      = 36;
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   label: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     fontWeight: 'bold',
     color: COLORS.textMuted,
     letterSpacing: 1,
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   barTrack: {
     width: BAR_W,
     height: BAR_H,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bgSurface,
     borderWidth: 2,
     borderColor: COLORS.border,
     borderRadius: 4,
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
   },
   powerValue: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 13,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
     minWidth: 40,

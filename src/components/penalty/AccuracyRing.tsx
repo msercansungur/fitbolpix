@@ -7,7 +7,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { COLORS, FONT_SIZE, SPACING } from '../../constants/theme';
+import { COLORS, SPACING } from '../../constants/theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const MAX_RADIUS = Math.min(SCREEN_W * 0.35, 130);
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   label: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 1,
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   hint: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     color: COLORS.textMuted,
   },
 });

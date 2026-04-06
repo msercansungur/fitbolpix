@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS, SPACING, FONT_SIZE } from '../../constants/theme';
+import { COLORS, SPACING } from '../../constants/theme';
 import { KickRecord, ShotOutcome } from '../../types/penalty';
 import { Team } from '../../types/simulator';
 
@@ -95,14 +95,14 @@ export default function ScoreTracker({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bgSurface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
   },
   roundLabel: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 1,
@@ -171,14 +171,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xs,
   },
   score: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
     minWidth: 16,
     textAlign: 'center',
   },
   scoreSep: {
-    fontSize: FONT_SIZE.md,
+    fontSize: 15,
     color: COLORS.textMuted,
     fontWeight: 'bold',
   },

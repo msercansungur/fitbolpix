@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
-import { COLORS, SPACING, FONT_SIZE } from '../constants/theme';
+import { COLORS, SPACING } from '../constants/theme';
 import { NATIONS, NATIONS_BY_ID } from '../constants/nations';
 import { Team } from '../types/simulator';
 import {
@@ -641,12 +641,12 @@ export default function PenaltyScreen({ route }: Props) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.bgPrimary,
   },
 
   // ── Page headers ──
   pageTitle: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.primary,
     textAlign: 'center',
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   pageSubtitle: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 13,
     color: COLORS.textMuted,
     textAlign: 'center',
     marginBottom: SPACING.md,
@@ -667,7 +667,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
   },
   modeBtn: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bgSurface,
     borderRadius: 10,
     borderWidth: 2,
     borderColor: COLORS.primary,
@@ -675,13 +675,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modeBtnTitle: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 1,
   },
   modeBtnSub: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 4,
   },
@@ -697,7 +697,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pickerLabel: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 1,
@@ -706,7 +706,7 @@ const styles = StyleSheet.create({
   },
   pickerList: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bgSurface,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
   },
   pickerFlag: { fontSize: 16 },
   pickerName: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     color: COLORS.textSecondary,
     flex: 1,
   },
@@ -747,10 +747,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startBtnDisabled: {
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.bgCardAlt,
   },
   startBtnText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#000',
     letterSpacing: 1,
@@ -765,7 +765,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   kickerText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 13,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
@@ -788,14 +788,14 @@ const styles = StyleSheet.create({
   commentaryBox: {
     marginHorizontal: SPACING.md,
     marginTop: SPACING.xs,
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.bgCardAlt,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: SPACING.sm,
   },
   commentaryText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 13,
     color: COLORS.textPrimary,
     textAlign: 'center',
     fontWeight: '500',
@@ -809,7 +809,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   controlsLabel: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 1,
@@ -817,7 +817,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   controlsHint: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     color: COLORS.textSecondary,
     textAlign: 'center',
   },
@@ -830,7 +830,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bgSurface,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -842,12 +842,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   techniqueBtnTitle: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 13,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
   techniqueBtnSub: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     color: COLORS.textMuted,
   },
 
@@ -876,7 +876,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xl,
   },
   cpuText: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.textSecondary,
     textAlign: 'center',
@@ -891,7 +891,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
   },
   resultTitle: {
-    fontSize: FONT_SIZE.xxl,
+    fontSize: 32,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 2,
@@ -900,20 +900,20 @@ const styles = StyleSheet.create({
     fontSize: 64,
   },
   resultWinner: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
     letterSpacing: 1,
   },
   resultScore: {
-    fontSize: FONT_SIZE.xxl,
+    fontSize: 32,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 2,
     marginTop: SPACING.sm,
   },
   resultNames: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 13,
     color: COLORS.textMuted,
     marginBottom: SPACING.lg,
   },
@@ -928,13 +928,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   playAgainBtnText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#000',
     letterSpacing: 1,
   },
   backBtn: {
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.bgCardAlt,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -942,7 +942,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backBtnText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 13,
     color: COLORS.textSecondary,
     fontWeight: 'bold',
   },

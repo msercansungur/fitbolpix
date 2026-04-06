@@ -1,34 +1,37 @@
 export const COLORS = {
-  // Pitch-inspired backgrounds
-  background: '#0d2818',
-  surface: '#122d1e',
-  surfaceAlt: '#1a3d28',
+  // Backgrounds
+  bgPrimary:  '#0B171F',
+  bgSurface:  '#00292A',
+  bgCard:     '#003D2E',
+  bgCardAlt:  '#00292A',
 
-  // Accents
-  primary: '#ffd700',    // pixel gold
-  primaryDim: '#b39700',
-  danger: '#e63946',
-  success: '#2dc653',
-  warning: '#f4a261',
+  // Brand
+  primary:      '#007B46',
+  primaryLight: '#94C952',
+  accent:       '#FACE43',
+  accentTeal:   '#28ADCF',
 
   // Text
-  textPrimary: '#f0f0f0',
-  textSecondary: '#9ab8a5',
-  textMuted: '#5a7a66',
+  textPrimary:   '#F0F4F7',
+  textSecondary: '#94B0C0',
+  textMuted:     '#58788D',
 
-  // Event type colors
-  goal: '#ffd700',
-  yellowCard: '#ffd700',
-  redCard: '#e63946',
-  save: '#60b4ff',
-  foul: '#f4a261',
-  varCheck: '#c084fc',
-  injury: '#fb923c',
-  neutral: '#9ab8a5',
+  // Semantic
+  success: '#94C952',
+  danger:  '#C2340B',
+  warning: '#F7AC38',
 
-  // Borders / dividers
-  border: '#1e4530',
-  divider: '#1e4530',
+  // UI
+  border:      '#004538',
+  borderLight: '#007B46',
+};
+
+export const FONTS = {
+  heading:       'BarlowCondensed_700Bold',
+  headingMedium: 'BarlowCondensed_600SemiBold',
+  body:          'Inter_400Regular',
+  bodyMedium:    'Inter_500Medium',
+  bodyBold:      'Inter_700Bold',
 };
 
 export const SPACING = {
@@ -37,13 +40,12 @@ export const SPACING = {
   md: 16,
   lg: 24,
   xl: 32,
+  xxl: 48,
 };
 
-export const FONT_SIZE = {
-  xs: 11,
-  sm: 13,
-  md: 15,
-  lg: 18,
+export const RADIUS = {
+  sm: 6,
+  md: 10,
+  lg: 16,
   xl: 24,
-  xxl: 32,
 };

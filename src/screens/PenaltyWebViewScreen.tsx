@@ -10,7 +10,7 @@ import {
 import WebView, { WebViewMessageEvent } from 'react-native-webview';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
-import { COLORS, SPACING, FONT_SIZE } from '../constants/theme';
+import { COLORS, SPACING } from '../constants/theme';
 import { NATIONS, NATIONS_BY_ID } from '../constants/nations';
 import { Team } from '../types/simulator';
 import { PENALTY_GAME_HTML } from '../assets/penalty-game/penaltyGame';
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
   // Root containers
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.bgPrimary,
   },
   gameRoot: {
     flex: 1,
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
 
   // Headers
   pageTitle: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.primary,
     textAlign: 'center',
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   pageSub: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 13,
     color: COLORS.textMuted,
     textAlign: 'center',
     marginBottom: SPACING.md,
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
   },
   modeBtn: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bgSurface,
     borderRadius: 10,
     borderWidth: 2,
     borderColor: COLORS.border,
@@ -378,13 +378,13 @@ const styles = StyleSheet.create({
     backgroundColor: `${COLORS.primary}18`,
   },
   modeBtnTitle: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 1,
   },
   modeBtnSub: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 4,
   },
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   nextBtnText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#000',
     letterSpacing: 1,
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   },
   pickerBlock: { flex: 1 },
   pickerLabel: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 1,
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   },
   pickerList: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bgSurface,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
   pickerItemDis: { opacity: 0.3 },
   pickerFlag:    { fontSize: 15 },
   pickerName: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: 11,
     color: COLORS.textSecondary,
     flex: 1,
   },
@@ -460,10 +460,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startBtnDis: {
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.bgCardAlt,
   },
   startBtnText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#000',
     letterSpacing: 1,

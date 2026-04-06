@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { COLORS, SPACING, FONT_SIZE } from '../constants/theme';
+import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { NATIONS_BY_ID } from '../constants/nations';
 import { ResolvedKnockoutMatch, KnockoutRound } from '../types/knockout';
 import { KNOCKOUT_MATCHES, ROUND_ORDERS } from '../constants/knockoutBracket';
@@ -38,9 +38,9 @@ const ROUND_ACCENT: Record<KnockoutRound, string> = {
   R32:   COLORS.textMuted,
   R16:   COLORS.textSecondary,
   QF:    COLORS.warning,
-  SF:    COLORS.primary,
-  '3rd': COLORS.save,
-  Final: COLORS.primary,
+  SF:    COLORS.primaryLight,
+  '3rd': COLORS.accentTeal,
+  Final: COLORS.accent,
 };
 
 // ─── Match card ───────────────────────────────────────────────────────────────
@@ -284,9 +284,9 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   colLabel: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: 'bold',
-    letterSpacing: 0.8,
+    fontFamily: FONTS.headingMedium,
+    fontSize: 10,
+    letterSpacing: 1,
     textTransform: 'uppercase',
     marginBottom: SPACING.sm,
     textAlign: 'center',
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bgCard,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -316,13 +316,13 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   cardMatchNum: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 9,
-    fontWeight: 'bold',
   },
   cardFT: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 9,
     color: COLORS.success,
-    fontWeight: 'bold',
   },
   cardBody: {
     flex: 1,
@@ -349,13 +349,13 @@ const styles = StyleSheet.create({
   },
   teamSlotName: {
     flex: 1,
+    fontFamily: FONTS.body,
     fontSize: 10,
     color: COLORS.textSecondary,
-    fontWeight: '500',
   },
   teamSlotNameWinner: {
+    fontFamily: FONTS.bodyBold,
     color: COLORS.textPrimary,
-    fontWeight: 'bold',
   },
 
   // ── Score / VS ──
@@ -364,15 +364,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardScore: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
+    fontFamily: FONTS.heading,
+    fontSize: 12,
+    color: COLORS.accent,
     letterSpacing: 0.5,
   },
   cardVs: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 9,
     color: COLORS.textMuted,
-    fontWeight: 'bold',
   },
 
   // ── Action buttons ──
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   quickSimBtn: {
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.bgSurface,
     borderRadius: 3,
     paddingHorizontal: 5,
     paddingVertical: 2,
@@ -399,14 +399,14 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   simBtnPlayed: {
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.bgSurface,
     borderWidth: 1,
     borderColor: COLORS.textMuted,
   },
   simBtnText: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 10,
-    fontWeight: 'bold',
-    color: '#000',
+    color: COLORS.textPrimary,
   },
   simBtnTextPlayed: {
     color: COLORS.textSecondary,

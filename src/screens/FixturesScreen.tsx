@@ -5,14 +5,14 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Animated,
   useAnimatedValue,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { GROUP_FIXTURES, GROUPS, fixturesByGroup } from '../constants/fixtures';
 import { NATIONS_BY_ID, NATIONS_BY_GROUP } from '../constants/nations';
-import { COLORS, SPACING, FONT_SIZE } from '../constants/theme';
+import { COLORS, SPACING, FONTS, RADIUS } from '../constants/theme';
 import { Fixture } from '../types/fixture';
 import { Team } from '../types/simulator';
 import { useFixtureStore } from '../store/useFixtureStore';
@@ -377,7 +377,7 @@ export default function FixturesScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+  root: { flex: 1, backgroundColor: COLORS.bgPrimary },
 
   // Header
   headerRow: {
@@ -387,17 +387,16 @@ const styles = StyleSheet.create({
   },
   header: {
     flex: 1,
-    fontSize: FONT_SIZE.lg,
-    fontWeight: 'bold',
-    color: COLORS.primary,
+    fontFamily: FONTS.heading,
+    fontSize: 20,
+    color: COLORS.accent,
     textAlign: 'center',
     paddingVertical: SPACING.sm,
-    letterSpacing: 1.5,
+    letterSpacing: 2,
   },
   loadingLabel: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: 20,
     color: COLORS.textMuted,
-    fontWeight: 'bold',
   },
 
   // View mode toggle
@@ -405,8 +404,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: SPACING.md,
     marginBottom: SPACING.xs,
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
+    backgroundColor: COLORS.bgSurface,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,
     overflow: 'hidden',
@@ -414,12 +413,12 @@ const styles = StyleSheet.create({
   viewToggleBtn: { flex: 1, paddingVertical: SPACING.xs + 2, alignItems: 'center' },
   viewToggleActive: { backgroundColor: COLORS.primary },
   viewToggleText: {
-    fontSize: FONT_SIZE.sm,
-    fontWeight: 'bold',
+    fontFamily: FONTS.bodyBold,
+    fontSize: 12,
     color: COLORS.textSecondary,
     letterSpacing: 0.5,
   },
-  viewToggleTextActive: { color: '#000' },
+  viewToggleTextActive: { color: COLORS.textPrimary },
 
   // Tab bar
   tabBarWrap: { maxHeight: 44, borderBottomWidth: 1, borderBottomColor: COLORS.border },
@@ -427,17 +426,21 @@ const styles = StyleSheet.create({
   tab: {
     width: 34,
     height: 32,
-    borderRadius: 6,
+    borderRadius: RADIUS.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bgSurface,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   tabWide: { width: 52 },
   tabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  tabText: { fontSize: FONT_SIZE.sm, fontWeight: 'bold', color: COLORS.textSecondary },
-  tabTextActive: { color: '#000' },
+  tabText: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  tabTextActive: { color: COLORS.textPrimary },
 
   // Content
   content: { flex: 1 },
@@ -447,49 +450,78 @@ const styles = StyleSheet.create({
   groupHeadingRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: SPACING.sm },
   sectionLabel: {
     flex: 1,
-    fontSize: FONT_SIZE.md,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    letterSpacing: 1,
+    fontFamily: FONTS.heading,
+    fontSize: 16,
+    color: COLORS.accent,
+    letterSpacing: 1.5,
   },
-  progressLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textMuted },
+  progressLabel: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
 
   // Standings table
   table: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
+    backgroundColor: COLORS.bgSurface,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,
     marginBottom: SPACING.lg,
     overflow: 'hidden',
   },
   tableHeader: {
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.bgCardAlt,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  tableHeaderText: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
+  tableHeaderText: {
+    fontFamily: FONTS.headingMedium,
+    color: COLORS.textSecondary,
+    fontSize: 11,
+  },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: COLORS.border,
   },
   tableRowQualifies: { borderLeftWidth: 3, borderLeftColor: COLORS.success },
-  tableRank: { width: 16, fontSize: FONT_SIZE.xs, color: COLORS.textMuted, textAlign: 'center', marginRight: 2 },
-  tableFlag: { fontSize: FONT_SIZE.md, width: 24, marginRight: 4 },
-  tableName: { flex: 1, fontSize: FONT_SIZE.sm, color: COLORS.textPrimary },
-  tableStat: { width: 26, textAlign: 'center', fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
-  tableStatPts: { color: COLORS.primary, fontWeight: 'bold' },
+  tableRank: {
+    width: 16,
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginRight: 2,
+  },
+  tableFlag: { fontSize: 15, width: 24, marginRight: 4 },
+  tableName: {
+    flex: 1,
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+  },
+  tableStat: {
+    width: 26,
+    textAlign: 'center',
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  tableStatPts: {
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.accent,
+  },
 
   // Matchday label
   matchdayLabel: {
-    fontSize: FONT_SIZE.sm,
-    fontWeight: 'bold',
+    fontFamily: FONTS.headingMedium,
+    fontSize: 12,
     color: COLORS.textMuted,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
     marginBottom: SPACING.sm,
     marginTop: SPACING.xs,
@@ -497,14 +529,14 @@ const styles = StyleSheet.create({
 
   // Fixture card
   fixtureCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 8,
+    backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,
     marginBottom: SPACING.sm,
     overflow: 'hidden',
   },
-  fixtureCardDone: { borderColor: COLORS.success, opacity: 0.92 },
+  fixtureCardDone: { borderColor: COLORS.borderLight },
   fixtureTeams: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -512,50 +544,83 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   groupBadge: {
-    backgroundColor: COLORS.surfaceAlt,
-    borderRadius: 3,
+    backgroundColor: COLORS.bgSurface,
+    borderRadius: RADIUS.sm,
     paddingHorizontal: 5,
     paddingVertical: 2,
     marginRight: SPACING.xs,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  groupBadgeText: { fontSize: 9, fontWeight: 'bold', color: COLORS.textMuted, letterSpacing: 0.3 },
+  groupBadgeText: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 9,
+    color: COLORS.textMuted,
+    letterSpacing: 0.3,
+  },
   fixtureTeam: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
   fixtureTeamRight: { justifyContent: 'flex-end' },
-  fixtureFlag: { fontSize: FONT_SIZE.xl },
-  fixtureTeamName: { flex: 1, fontSize: FONT_SIZE.sm, color: COLORS.textSecondary, fontWeight: '600' },
+  fixtureFlag: { fontSize: 22 },
+  fixtureTeamName: {
+    flex: 1,
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
   fixtureTeamNameRight: { textAlign: 'right' },
-  fixtureTeamWinner: { color: COLORS.textPrimary, fontWeight: 'bold' },
+  fixtureTeamWinner: {
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.textPrimary,
+  },
   fixtureVs: {
-    fontSize: FONT_SIZE.xs,
+    fontFamily: FONTS.bodyBold,
+    fontSize: 11,
     color: COLORS.textMuted,
-    fontWeight: 'bold',
     paddingHorizontal: SPACING.xs,
   },
   fixtureScoreBox: { alignItems: 'center', paddingHorizontal: SPACING.sm },
   fixtureScore: {
-    fontSize: FONT_SIZE.lg,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
+    fontFamily: FONTS.heading,
+    fontSize: 24,
+    color: COLORS.accent,
     letterSpacing: 1,
   },
-  fixtureScoreLabel: { fontSize: FONT_SIZE.xs, color: COLORS.success, fontWeight: 'bold', letterSpacing: 1 },
+  fixtureScoreLabel: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 10,
+    color: COLORS.success,
+    letterSpacing: 1,
+  },
   fixtureMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceAlt,
+    backgroundColor: COLORS.bgSurface,
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     gap: SPACING.xs,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
-  fixtureDate: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, fontWeight: '600', width: 60 },
-  fixtureVenue: { flex: 1, fontSize: FONT_SIZE.xs, color: COLORS.textMuted },
+  fixtureDate: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    width: 60,
+  },
+  fixtureVenue: {
+    flex: 1,
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
 
   // Live badge
   liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.danger },
-  liveBadgeText: { fontSize: 9, fontWeight: 'bold', color: COLORS.danger, letterSpacing: 0.5 },
+  liveBadgeText: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 9,
+    color: COLORS.danger,
+    letterSpacing: 0.5,
+  },
 });
