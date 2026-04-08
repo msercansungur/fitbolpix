@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { COLORS, SPACING, FONTS } from '../constants/theme';
 import { NATIONS_BY_ID } from '../constants/nations';
+import PixelFlag from './PixelFlag';
 import { ResolvedKnockoutMatch, KnockoutRound } from '../types/knockout';
 import { KNOCKOUT_MATCHES, ROUND_ORDERS } from '../constants/knockoutBracket';
 
@@ -49,12 +50,15 @@ function TeamSlot({ teamId, winner }: { teamId: string | null; winner?: boolean 
   const team = teamId ? NATIONS_BY_ID[teamId] : null;
   return (
     <View style={[styles.teamSlot, winner && styles.teamSlotWinner]}>
-      <Text style={styles.teamSlotFlag}>{team?.flag ?? '🏳️'}</Text>
+      {team
+        ? <PixelFlag isoCode={team.isoCode} size={16} />
+        : <Text style={styles.teamSlotFlag}>🏳️</Text>
+      }
       <Text
         style={[styles.teamSlotName, winner && styles.teamSlotNameWinner]}
         numberOfLines={1}
       >
-        {team?.name ?? '?'}
+        {team?.code3 ?? '?'}
       </Text>
     </View>
   );

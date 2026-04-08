@@ -8,7 +8,9 @@ import {
   ScrollView,
   ListRenderItem,
   Alert,
+  Dimensions,
 } from 'react-native';
+import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useSimulator } from '../hooks/useSimulator';
@@ -28,6 +30,27 @@ import { resolveKnockoutBracket } from '../utils/knockoutEngine';
 import { ResolvedKnockoutMatch } from '../types/knockout';
 import { MatchResult } from '../types/matchResult';
 import KnockoutBracket from '../components/KnockoutBracket';
+import PixelFlag from '../components/PixelFlag';
+import { animateScore } from '../utils/scoreAnimation';
+import { getMatchSimHTML, MatchSimConfig } from '../assets/match-sim/matchSim';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
+
+// ─── Kit colour map (hex number → injected into Phaser WebView) ───────────────
+const KIT_COLORS: Record<string, number> = {
+  mex:0x006847, rsa:0x007A4D, kor:0xC60C30, cze:0xD7141A,
+  can:0xFF0000, bih:0x002395, qat:0x8D1B3D, swi:0xFF0000,
+  bra:0x009c3b, mor:0xC1272D, hai:0x00209F, sco:0x003F87,
+  usa:0x002868, par:0xD52B1E, aus:0x00843D, tur:0xE30A17,
+  ger:0x000000, cur:0x003DA5, civ:0xFF8000, ecua:0xFFD100,
+  ned:0xFF6600, jpn:0xBC002D, swe:0x006AA7, tun:0xE70013,
+  bel:0xED2939, egy:0xC8102E, iri:0x239F40, nzl:0x00247D,
+  spa:0xAA151B, cpv:0x003893, ksa:0x006C35, uru:0x5EB6E4,
+  fra:0x003189, sen:0x00853F, irq:0xCE1126, nor:0xEF2B2D,
+  arg:0x74ACDF, alg:0x006233, aut:0xED2939, jor:0x007A3D,
+  por:0x006600, cod:0x007FFF, uzb:0x1EB53A, col:0xFCD116,
+  eng:0xCF081F, cro:0xFF0000, gha:0x006B3F, pan:0xDB001B,
+};
 
 type Props = BottomTabScreenProps<BottomTabParamList, 'Simulator'>;
 type SimMode    = 'match' | 'tournament';
@@ -56,20 +79,21 @@ const EVENT_COLOR: Record<EventType, string> = {
 
 // ─── Shared sub-components ────────────────────────────────────────────────────
 
-function TeamRow({ team, label, selected, onPress }: {
-  team: Team; label: string; selected: boolean; onPress: () => void;
+// 4-column nation card for sequential picker
+function NationPickerCard({ team, selected, onPress }: {
+  team: Team; selected: boolean; onPress: () => void;
 }) {
+  const cardW = (SCREEN_WIDTH - 32 - 9) / 4; // 4 cols, 16px padding each side, 3×3px gaps
   return (
     <TouchableOpacity
-      style={[styles.teamRow, selected && styles.teamRowSelected]}
+      style={[styles.nationCard, { width: cardW }, selected && styles.nationCardSelected]}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <Text style={styles.teamRowFlag}>{team.flag}</Text>
-      <Text style={[styles.teamRowName, selected && styles.teamRowNameSelected]} numberOfLines={1}>
-        {team.name}
+      <PixelFlag isoCode={team.isoCode} size={28} />
+      <Text style={[styles.nationCardCode, selected && styles.nationCardCodeSelected]}>
+        {team.code3}
       </Text>
-      {selected && <Text style={styles.teamRowBadge}>{label}</Text>}
     </TouchableOpacity>
   );
 }
@@ -85,16 +109,16 @@ function Scoreboard({ homeTeam, awayTeam, homeScore, awayScore, minute, status }
   return (
     <View style={styles.scoreboard}>
       <View style={styles.scoreTeam}>
-        <Text style={styles.scoreFlag}>{homeTeam.flag}</Text>
-        <Text style={styles.scoreName} numberOfLines={1}>{homeTeam.name}</Text>
+        <PixelFlag isoCode={homeTeam.isoCode} size={36} />
+        <Text style={styles.scoreName} numberOfLines={1}>{homeTeam.code3}</Text>
       </View>
       <View style={styles.scoreCenter}>
         <Text style={styles.scoreNumbers}>{homeScore} – {awayScore}</Text>
         <Text style={styles.scoreMinute}>{minuteLabel}</Text>
       </View>
       <View style={[styles.scoreTeam, styles.scoreTeamRight]}>
-        <Text style={styles.scoreFlag}>{awayTeam.flag}</Text>
-        <Text style={styles.scoreName} numberOfLines={1}>{awayTeam.name}</Text>
+        <PixelFlag isoCode={awayTeam.isoCode} size={36} />
+        <Text style={styles.scoreName} numberOfLines={1}>{awayTeam.code3}</Text>
       </View>
     </View>
   );
@@ -124,10 +148,6 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-function gd(played: number, won: number, drawn: number, lost: number, gf: number, ga: number): number {
-  return gf - ga;
-}
-
 // ─── Tournament — Standings row ───────────────────────────────────────────────
 
 function TourneyStandingRow({ team, standing, rank }: {
@@ -140,8 +160,8 @@ function TourneyStandingRow({ team, standing, rank }: {
   return (
     <View style={[styles.tableRow, qualifies && styles.tableRowQualifies]}>
       <Text style={styles.tableRank}>{rank}</Text>
-      <Text style={styles.tableFlag}>{team.flag}</Text>
-      <Text style={styles.tableName} numberOfLines={1}>{team.name}</Text>
+      <View style={styles.tableFlag}><PixelFlag isoCode={team.isoCode} size={16} /></View>
+      <Text style={styles.tableName} numberOfLines={1}>{team.code3}</Text>
       <Text style={styles.tableStat}>{standing?.played  ?? 0}</Text>
       <Text style={styles.tableStat}>{standing?.won     ?? 0}</Text>
       <Text style={styles.tableStat}>{standing?.drawn   ?? 0}</Text>
@@ -154,16 +174,32 @@ function TourneyStandingRow({ team, standing, rank }: {
 
 // ─── Tournament — Fixture card with sim buttons ───────────────────────────────
 
-function TourneyFixtureCard({ fixture, result, groupBadge, onQuickSim }: {
+function TourneyFixtureCard({ fixture, result, groupBadge, onQuickSim, animating }: {
   fixture: typeof GROUP_FIXTURES[number];
   result: MatchResult | null;
   groupBadge?: string;
   onQuickSim: () => void;
+  animating?: boolean;
 }) {
   const home = NATIONS_BY_ID[fixture.homeTeamId];
   const away = NATIONS_BY_ID[fixture.awayTeamId];
   if (!home || !away) return null;
   const isPlayed = result !== null;
+
+  const [dispHome, setDispHome] = useState(result?.homeScore ?? 0);
+  const [dispAway, setDispAway] = useState(result?.awayScore ?? 0);
+
+  useEffect(() => {
+    if (!result) { setDispHome(0); setDispAway(0); return; }
+    if (animating) {
+      const c1 = animateScore(result.homeScore, setDispHome);
+      const c2 = animateScore(result.awayScore, setDispAway);
+      return () => { c1(); c2(); };
+    } else {
+      setDispHome(result.homeScore);
+      setDispAway(result.awayScore);
+    }
+  }, [result?.homeScore, result?.awayScore, animating]);
 
   return (
     <View style={[styles.fixtureCard, isPlayed && styles.fixtureCardPlayed]}>
@@ -174,14 +210,14 @@ function TourneyFixtureCard({ fixture, result, groupBadge, onQuickSim }: {
           </View>
         )}
         <View style={styles.fixtureTeam}>
-          <Text style={styles.fixtureFlag}>{home.flag}</Text>
+          <PixelFlag isoCode={home.isoCode} size={20} />
           <Text style={[styles.fixtureTeamName, isPlayed && result!.homeScore > result!.awayScore && styles.fixtureTeamWinner]} numberOfLines={1}>
-            {home.name}
+            {home.code3}
           </Text>
         </View>
         {isPlayed ? (
           <View style={styles.fixtureScoreBox}>
-            <Text style={styles.fixtureScore}>{result!.homeScore} – {result!.awayScore}</Text>
+            <Text style={styles.fixtureScore}>{dispHome} – {dispAway}</Text>
             <Text style={styles.fixtureScoreLabel}>FT</Text>
           </View>
         ) : (
@@ -189,9 +225,9 @@ function TourneyFixtureCard({ fixture, result, groupBadge, onQuickSim }: {
         )}
         <View style={[styles.fixtureTeam, styles.fixtureTeamRight]}>
           <Text style={[styles.fixtureTeamName, styles.fixtureTeamNameRight, isPlayed && result!.awayScore > result!.homeScore && styles.fixtureTeamWinner]} numberOfLines={1}>
-            {away.name}
+            {away.code3}
           </Text>
-          <Text style={styles.fixtureFlag}>{away.flag}</Text>
+          <PixelFlag isoCode={away.isoCode} size={20} />
         </View>
       </View>
       <View style={styles.fixtureMeta}>
@@ -231,15 +267,28 @@ function runQuickSim(
 
 export default function SimulatorScreen({ route }: Props) {
   // ── MATCH mode state ───────────────────────────────────────────────────────
-  const { state, selectHomeTeam, selectAwayTeam, startMatch, resetMatch, setTeamsAndStart } = useSimulator();
+  const { state, selectHomeTeam, selectAwayTeam, resetMatch, setTeamsAndStart } = useSimulator();
   const feedRef   = useRef<FlatList<MatchEvent>>(null);
   const fixtureId = route.params?.fixtureId;
 
   // ── Mode + Tournament sub-view ─────────────────────────────────────────────
-  const [simMode,       setSimMode]       = useState<SimMode>('match');
-  const [tourneyView,   setTourneyView]   = useState<TourneyView>('groups');
-  const [activeGroup,   setActiveGroup]   = useState<string>('A');
+  const [simMode,        setSimMode]       = useState<SimMode>('match');
+  const [tourneyView,    setTourneyView]   = useState<TourneyView>('groups');
+  const [activeGroup,    setActiveGroup]   = useState<string>('A');
   const [activeMatchday, setActiveMatchday] = useState<1 | 2 | 3>(1);
+  const [pickerStep,     setPickerStep]    = useState<'home' | 'away'>('home');
+  const [justSimmedId,   setJustSimmedId]  = useState<string | null>(null);
+
+  // ── WebView match state ────────────────────────────────────────────────────
+  const [webViewActive,  setWebViewActive] = useState(false);
+  const [webMatchDone,   setWebMatchDone]  = useState(false);
+  const pendingMatchRef = useRef<{
+    homeTeam: Team; awayTeam: Team;
+    homeScore: number; awayScore: number;
+    events: ReturnType<typeof simulateMatch>;
+  } | null>(null);
+  // HTML is built once at kick-off with config baked in; stored in a ref to avoid re-renders
+  const matchHtmlRef = useRef<string>('');
 
   // ── Simulator store (tournament mode reads/writes here) ────────────────────
   const results         = useSimulatorStore((s) => s.results);
@@ -319,6 +368,8 @@ export default function SimulatorScreen({ route }: Props) {
   // ── Tournament actions ─────────────────────────────────────────────────────
   const handleQuickSim = useCallback((fixture: typeof GROUP_FIXTURES[number]) => {
     runQuickSim(fixture, saveResult);
+    setJustSimmedId(fixture.id);
+    setTimeout(() => setJustSimmedId(null), 700);
   }, [saveResult]);
 
   const handleSimAll = useCallback((fixtures: typeof GROUP_FIXTURES) => {
@@ -400,17 +451,95 @@ export default function SimulatorScreen({ route }: Props) {
     ]);
   }, [clearAll]);
 
+  // ── WebView match handlers ─────────────────────────────────────────────────
+  const handleKickOff = useCallback(() => {
+    const home = state.homeTeam;
+    const away = state.awayTeam;
+    if (!home || !away || home.id === away.id) return;
+
+    const events = simulateMatch(home, away, 'en');
+    const score  = computeScore(events, home.id, away.id);
+
+    pendingMatchRef.current = { homeTeam: home, awayTeam: away, homeScore: score.home, awayScore: score.away, events };
+
+    const config: MatchSimConfig = {
+      homeId:         home.id,
+      homeName:       home.name,
+      homeCode:       home.code3,
+      homeColor:      KIT_COLORS[home.id] ?? 0x2196f3,
+      homeStrength:   home.strength,
+      homeFormation:  home.formation ?? '4-4-2',
+      awayId:         away.id,
+      awayName:       away.name,
+      awayCode:       away.code3,
+      awayColor:      KIT_COLORS[away.id] ?? 0xf44336,
+      awayStrength:   away.strength,
+      awayFormation:  away.formation ?? '4-4-2',
+      events: events.map((e) => ({ type: e.type, teamId: e.teamId, minute: e.minute })),
+      seed: Date.now() % 99991,
+    };
+
+    console.log('[MatchSim]', config.homeCode, 'vs', config.awayCode, 'events:', config.events.length);
+    matchHtmlRef.current = getMatchSimHTML(config);
+    setWebMatchDone(false);
+    setWebViewActive(true);
+  }, [state.homeTeam, state.awayTeam]);
+
+  const handleWebViewMessage = useCallback((event: WebViewMessageEvent) => {
+    try {
+      const msg = JSON.parse(event.nativeEvent.data);
+      if (msg.type !== 'MATCH_RESULT') return;
+      const pm = pendingMatchRef.current;
+      if (!pm) return;
+
+      setWebMatchDone(true);
+
+      const fid = fixtureId ?? `adhoc-${pm.homeTeam.id}-${pm.awayTeam.id}-${Date.now()}`;
+      if (fid.startsWith('ko-')) {
+        const matchId = parseInt(fid.replace('ko-', ''), 10);
+        if (!isNaN(matchId)) {
+          saveKnockoutResult({ matchId, homeTeamId: pm.homeTeam.id, awayTeamId: pm.awayTeam.id, homeScore: pm.homeScore, awayScore: pm.awayScore, events: pm.events, simulatedAt: Date.now() });
+          return;
+        }
+      }
+      saveResult({ fixtureId: fid, homeTeamId: pm.homeTeam.id, awayTeamId: pm.awayTeam.id, homeScore: pm.homeScore, awayScore: pm.awayScore, events: pm.events, simulatedAt: Date.now() });
+    } catch {
+      // ignore malformed messages
+    }
+  }, [fixtureId, saveResult, saveKnockoutResult]);
+
+  const handleNewMatch = useCallback(() => {
+    setWebViewActive(false);
+    setWebMatchDone(false);
+    pendingMatchRef.current = null;
+    resetMatch();
+    setPickerStep('home');
+  }, [resetMatch]);
+
   // ── Render helpers ─────────────────────────────────────────────────────────
   const bothSelected = state.homeTeam !== null && state.awayTeam !== null;
   const sameTeam     = state.homeTeam?.id === state.awayTeam?.id;
   const canKickOff   = bothSelected && !sameTeam;
 
-  const renderTeam: ListRenderItem<Team> = ({ item }) => (
-    <View style={styles.teamPickerRow}>
-      <TeamRow team={item} label="H" selected={state.homeTeam?.id === item.id} onPress={() => selectHomeTeam(item)} />
-      <TeamRow team={item} label="A" selected={state.awayTeam?.id === item.id} onPress={() => selectAwayTeam(item)} />
-    </View>
-  );
+  const renderNationCard: ListRenderItem<Team> = ({ item }) => {
+    const isSelected = pickerStep === 'home'
+      ? state.homeTeam?.id === item.id
+      : state.awayTeam?.id === item.id;
+    return (
+      <NationPickerCard
+        team={item}
+        selected={isSelected}
+        onPress={() => {
+          if (pickerStep === 'home') {
+            selectHomeTeam(item);
+            setPickerStep('away');
+          } else {
+            selectAwayTeam(item);
+          }
+        }}
+      />
+    );
+  };
 
   const renderEvent: ListRenderItem<MatchEvent> = ({ item }) => (
     <EventItem event={item} homeId={state.homeTeam?.id ?? ''} />
@@ -430,7 +559,7 @@ export default function SimulatorScreen({ route }: Props) {
           activeOpacity={0.7}
         >
           <Text style={[styles.modeToggleText, simMode === m && styles.modeToggleTextActive]}>
-            {m === 'match' ? '⚽ MATCH' : '🏆 TOURNAMENT SIM'}
+            {m === 'match' ? '⚽ HEAD TO HEAD' : '🏆 TOURNAMENT SIM'}
           </Text>
         </TouchableOpacity>
       ))}
@@ -442,31 +571,118 @@ export default function SimulatorScreen({ route }: Props) {
   // ═══════════════════════════════════════════════════════════════════════════
 
   if (simMode === 'match') {
-    if (state.status === 'idle') {
+    // ── WebView match view ───────────────────────────────────────────────────
+    if (webViewActive) {
+      const pm = pendingMatchRef.current;
       return (
         <SafeAreaView style={styles.root}>
           {topToggle}
-          <View style={styles.pickerHeader}>
-            <Text style={styles.pickerLabel}>HOME</Text>
-            <Text style={styles.pickerLabel}>AWAY</Text>
+          {webMatchDone && pm ? (
+            // Post-match result screen
+            <View style={styles.matchResultScreen}>
+              <View style={styles.matchResultCard}>
+                <Text style={styles.matchResultTitle}>FULL TIME</Text>
+                <View style={styles.matchResultTeams}>
+                  <View style={styles.matchResultTeam}>
+                    <PixelFlag isoCode={pm.homeTeam.isoCode} size={40} />
+                    <Text style={styles.matchResultCode}>{pm.homeTeam.code3}</Text>
+                  </View>
+                  <Text style={styles.matchResultScore}>{pm.homeScore} – {pm.awayScore}</Text>
+                  <View style={styles.matchResultTeam}>
+                    <PixelFlag isoCode={pm.awayTeam.isoCode} size={40} />
+                    <Text style={styles.matchResultCode}>{pm.awayTeam.code3}</Text>
+                  </View>
+                </View>
+                {pm.homeScore !== pm.awayScore && (
+                  <Text style={styles.matchResultWinner}>
+                    🏆 {pm.homeScore > pm.awayScore ? pm.homeTeam.code3 : pm.awayTeam.code3} WIN
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity style={styles.ctaButton} onPress={handleNewMatch} activeOpacity={0.8}>
+                <Text style={styles.ctaText}>🔄  NEW MATCH</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            // Live Phaser WebView
+            <WebView
+              source={{ html: matchHtmlRef.current }}
+              onMessage={handleWebViewMessage}
+              style={styles.webViewMatch}
+              javaScriptEnabled
+              originWhitelist={['*']}
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              scrollEnabled={false}
+              bounces={false}
+              overScrollMode="never"
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+        </SafeAreaView>
+      );
+    }
+
+    if (state.status === 'idle') {
+      // Selected team summary strip
+      const homeStrip = state.homeTeam
+        ? <View style={styles.selStrip}><PixelFlag isoCode={state.homeTeam.isoCode} size={18} /><Text style={styles.selStripText}>{state.homeTeam.code3}</Text></View>
+        : <Text style={styles.selStripEmpty}>—</Text>;
+      const awayStrip = state.awayTeam
+        ? <View style={styles.selStrip}><PixelFlag isoCode={state.awayTeam.isoCode} size={18} /><Text style={styles.selStripText}>{state.awayTeam.code3}</Text></View>
+        : <Text style={styles.selStripEmpty}>—</Text>;
+
+      return (
+        <SafeAreaView style={styles.root}>
+          {topToggle}
+
+          {/* Current selection bar */}
+          <View style={styles.selBar}>
+            <View style={styles.selSide}>
+              <Text style={[styles.selLabel, pickerStep === 'home' && styles.selLabelActive]}>HOME</Text>
+              {homeStrip}
+            </View>
+            <Text style={styles.selVs}>VS</Text>
+            <View style={[styles.selSide, styles.selSideRight]}>
+              <Text style={[styles.selLabel, pickerStep === 'away' && styles.selLabelActive]}>AWAY</Text>
+              {awayStrip}
+            </View>
           </View>
+          <Text style={styles.pickerPrompt}>
+            {pickerStep === 'home' ? 'SELECT HOME TEAM' : 'SELECT AWAY TEAM'}
+          </Text>
+
           <FlatList
             data={NATIONS}
             keyExtractor={(t) => t.id}
-            renderItem={renderTeam}
+            renderItem={renderNationCard}
+            numColumns={4}
+            columnWrapperStyle={styles.pickerRow}
             contentContainerStyle={styles.pickerList}
             style={styles.picker}
           />
-          <TouchableOpacity
-            style={[styles.ctaButton, !canKickOff && styles.ctaButtonDisabled]}
-            onPress={startMatch}
-            disabled={!canKickOff}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.ctaText}>
-              {!bothSelected ? 'PICK BOTH TEAMS' : sameTeam ? 'PICK DIFFERENT TEAMS' : '⚽  KICK OFF!'}
-            </Text>
-          </TouchableOpacity>
+          {pickerStep === 'away' && (
+            <TouchableOpacity
+              style={[styles.ctaButton, !canKickOff && styles.ctaButtonDisabled]}
+              onPress={handleKickOff}
+              disabled={!canKickOff}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.ctaText}>
+                {sameTeam ? 'PICK DIFFERENT TEAM' : '⚽  KICK OFF!'}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {pickerStep === 'away' && (
+            <TouchableOpacity
+              style={styles.backPickerBtn}
+              onPress={() => setPickerStep('home')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.backPickerText}>← CHANGE HOME TEAM</Text>
+            </TouchableOpacity>
+          )}
         </SafeAreaView>
       );
     }
@@ -604,6 +820,7 @@ export default function SimulatorScreen({ route }: Props) {
                     fixture={fixture}
                     result={selectSimResult(results, fixture.id)}
                     onQuickSim={() => handleQuickSim(fixture)}
+                    animating={justSimmedId === fixture.id}
                   />
                 ))}
               </View>
@@ -640,6 +857,7 @@ export default function SimulatorScreen({ route }: Props) {
               result={selectSimResult(results, fixture.id)}
               groupBadge={`Group ${fixture.group}`}
               onQuickSim={() => handleQuickSim(fixture)}
+              animating={justSimmedId === fixture.id}
             />
           ))}
         </ScrollView>
@@ -793,7 +1011,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginRight: 2,
   },
-  tableFlag: { fontSize: 15, width: 24, marginRight: 4 },
+  tableFlag: { width: 22, marginRight: 4, alignItems: 'center' as const },
   tableName: {
     flex: 1,
     fontFamily: FONTS.body,
@@ -897,10 +1115,10 @@ const styles = StyleSheet.create({
   },
   fixtureScoreBox: { alignItems: 'center', paddingHorizontal: SPACING.sm },
   fixtureScore: {
-    fontFamily: FONTS.heading,
-    fontSize: 22,
+    fontFamily: FONTS.pixel,
+    fontSize: 18,
     color: COLORS.accent,
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
   fixtureScoreLabel: {
     fontFamily: FONTS.bodyBold,
@@ -975,47 +1193,82 @@ const styles = StyleSheet.create({
   },
   resetBtnText: { fontSize: 15 },
 
-  // Match mode — team picker
-  pickerHeader: { flexDirection: 'row', paddingHorizontal: SPACING.md, marginBottom: SPACING.xs },
-  pickerLabel: {
-    flex: 1,
-    textAlign: 'center',
-    fontFamily: FONTS.heading,
-    fontSize: 14,
-    color: COLORS.accent,
-    letterSpacing: 2,
-  },
-  picker: { flex: 1 },
-  pickerList: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
-  teamPickerRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.xs },
-  teamRow: {
-    flex: 1,
+  // Match mode — sequential team picker
+  selBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: COLORS.bgSurface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  selSide: { flex: 1, alignItems: 'flex-start', gap: 4 },
+  selSideRight: { alignItems: 'flex-end' },
+  selLabel: {
+    fontFamily: FONTS.pixel,
+    fontSize: 10,
+    color: COLORS.textMuted,
+    letterSpacing: 1,
+  },
+  selLabelActive: { color: COLORS.accent },
+  selStrip: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  selStripText: {
+    fontFamily: FONTS.pixel,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  selStripEmpty: {
+    fontFamily: FONTS.pixel,
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
+  selVs: {
+    fontFamily: FONTS.pixel,
+    fontSize: 12,
+    color: COLORS.textMuted,
+    paddingHorizontal: SPACING.md,
+  },
+  pickerPrompt: {
+    fontFamily: FONTS.pixel,
+    fontSize: 11,
+    color: COLORS.accent,
+    letterSpacing: 1,
+    textAlign: 'center',
+    paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.bgPrimary,
+  },
+  picker: { flex: 1 },
+  pickerRow: { gap: 3, paddingHorizontal: 16, marginBottom: 3 },
+  pickerList: { paddingTop: SPACING.xs, paddingBottom: SPACING.md },
+  nationCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: COLORS.bgCard,
     borderRadius: RADIUS.sm,
     paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.sm,
     borderWidth: 1,
     borderColor: COLORS.border,
-    gap: SPACING.xs,
+    gap: 3,
   },
-  teamRowSelected: { backgroundColor: COLORS.bgSurface, borderColor: COLORS.primary },
-  teamRowFlag: { fontSize: 15 },
-  teamRowName: {
-    flex: 1,
-    fontFamily: FONTS.body,
-    fontSize: 11,
+  nationCardSelected: { backgroundColor: COLORS.primary, borderColor: COLORS.primaryLight },
+  nationCardCode: {
+    fontFamily: FONTS.pixel,
+    fontSize: 9,
     color: COLORS.textSecondary,
+    letterSpacing: 0.5,
   },
-  teamRowNameSelected: {
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.textPrimary,
+  nationCardCodeSelected: { color: COLORS.textPrimary },
+  backPickerBtn: {
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+    paddingBottom: SPACING.sm,
   },
-  teamRowBadge: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 11,
-    color: COLORS.accent,
+  backPickerText: {
+    fontFamily: FONTS.pixel,
+    fontSize: 10,
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
   },
 
   // Match mode — scoreboard
@@ -1032,25 +1285,26 @@ const styles = StyleSheet.create({
   },
   scoreTeam:      { flex: 1, alignItems: 'center', gap: SPACING.xs },
   scoreTeamRight: {},
-  scoreFlag:  { fontSize: 32 },
   scoreName: {
-    fontFamily: FONTS.bodyMedium,
-    fontSize: 11,
+    fontFamily: FONTS.pixel,
+    fontSize: 13,
     color: COLORS.textSecondary,
     textAlign: 'center',
+    letterSpacing: 1,
   },
   scoreCenter: { alignItems: 'center', paddingHorizontal: SPACING.md },
   scoreNumbers: {
-    fontFamily: FONTS.heading,
-    fontSize: 48,
+    fontFamily: FONTS.pixel,
+    fontSize: 44,
     color: COLORS.accent,
-    letterSpacing: 4,
+    letterSpacing: 6,
   },
   scoreMinute: {
-    fontFamily: FONTS.body,
-    fontSize: 11,
+    fontFamily: FONTS.pixel,
+    fontSize: 10,
     color: COLORS.textMuted,
     marginTop: 2,
+    letterSpacing: 1,
   },
 
   // Match mode — event feed
@@ -1095,5 +1349,55 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.textPrimary,
     letterSpacing: 1,
+  },
+
+  // WebView match
+  webViewMatch: { flex: 1 },
+
+  // Post-match result screen
+  matchResultScreen: { flex: 1, justifyContent: 'center', padding: SPACING.md },
+  matchResultCard: {
+    backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.xl,
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  matchResultTitle: {
+    fontFamily: FONTS.pixel,
+    fontSize: 22,
+    color: COLORS.accent,
+    letterSpacing: 3,
+    marginBottom: SPACING.lg,
+  },
+  matchResultTeams: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  matchResultTeam: { alignItems: 'center', gap: SPACING.xs },
+  matchResultCode: {
+    fontFamily: FONTS.pixel,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    letterSpacing: 1,
+  },
+  matchResultScore: {
+    fontFamily: FONTS.pixel,
+    fontSize: 40,
+    color: COLORS.textPrimary,
+    letterSpacing: 4,
+    minWidth: 90,
+    textAlign: 'center',
+  },
+  matchResultWinner: {
+    fontFamily: FONTS.pixel,
+    fontSize: 14,
+    color: COLORS.success,
+    letterSpacing: 1,
+    marginTop: SPACING.sm,
   },
 });

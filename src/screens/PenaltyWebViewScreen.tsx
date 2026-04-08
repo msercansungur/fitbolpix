@@ -12,6 +12,7 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
 import { COLORS, SPACING } from '../constants/theme';
 import { NATIONS, NATIONS_BY_ID } from '../constants/nations';
+import PageHeader from '../components/PageHeader';
 import { Team } from '../types/simulator';
 import { PENALTY_GAME_HTML } from '../assets/penalty-game/penaltyGame';
 import { useMatchStore } from '../store/useMatchStore';
@@ -259,8 +260,8 @@ export default function PenaltyWebViewScreen({ route }: Props) {
   if (setupPhase === 'mode') {
     return (
       <SafeAreaView style={styles.root}>
-        <Text style={styles.pageTitle}>⚽ PENALTY SHOOTOUT</Text>
-        <Text style={styles.pageSub}>Choose match format</Text>
+        <PageHeader icon="🥅" title="PENALTY SHOOTOUT" subtitle="Choose match format" />
+
 
         <View style={styles.modeButtons}>
           <TouchableOpacity
@@ -297,16 +298,11 @@ export default function PenaltyWebViewScreen({ route }: Props) {
   const canStart = pickedHome !== null && pickedAway !== null;
   return (
     <SafeAreaView style={styles.root}>
-      <Text style={styles.pageTitle}>⚽ PENALTY SHOOTOUT</Text>
-      <Text style={styles.pageSub}>
-        {mode === 'best_of_5' ? 'Best of 5' : 'Sudden Death'} —
-        <Text
-          style={styles.changeMode}
-          onPress={() => setSetupPhase('mode')}
-        >
-          {' '}change
-        </Text>
-      </Text>
+      <PageHeader
+        icon="🥅"
+        title="PENALTY SHOOTOUT"
+        subtitle={`${mode === 'best_of_5' ? 'Best of 5' : 'Sudden Death'} · tap to change mode`}
+      />
 
       <View style={styles.teamPickers}>
         <TeamPicker label="YOUR TEAM" selected={pickedHome} onSelect={setPickedHome} exclude={pickedAway} />

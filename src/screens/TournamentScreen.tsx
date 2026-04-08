@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Animated,
   Dimensions,
   Alert,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -20,9 +21,10 @@ import { useTournamentMatchStore, selectTournamentStandings } from '../store/use
 import { useTournamentStore } from '../store/useTournamentStore';
 import { resolveKnockoutBracket, getBestThirdPlacers } from '../utils/knockoutEngine';
 import { simulateMatch, computeScore } from '../utils/simulator';
-import { Team } from '../types/simulator';
 import { TeamStanding } from '../types/matchResult';
 import { KnockoutRound } from '../types/knockout';
+import PixelFlag from '../components/PixelFlag';
+import { animateScore } from '../utils/scoreAnimation';
 
 type Props = BottomTabScreenProps<BottomTabParamList, 'Tournament'>;
 
@@ -38,20 +40,106 @@ const ROUND_LABELS: Record<string, string> = {
   Final: 'THE FINAL',
 };
 
-// ─── ELO → star rating (1–5) ─────────────────────────────────────────────────
-function eloToStars(elo: number): number {
-  if (elo >= 1820) return 5;
-  if (elo >= 1700) return 4;
-  if (elo >= 1580) return 3;
-  if (elo >= 1460) return 2;
-  return 1;
+// ─── ELO bar (replaces star rating) ──────────────────────────────────────────
+const ELO_MIN = 1400;
+const ELO_MAX = 1950;
+
+function EloBar({ strength, label }: { strength: number; label?: boolean }) {
+  const pct = Math.min(1, Math.max(0, (strength - ELO_MIN) / (ELO_MAX - ELO_MIN)));
+  // colour: green → yellow → red by how strong (green = strong)
+  const barColor = pct > 0.7 ? COLORS.success : pct > 0.4 ? COLORS.warning : COLORS.textMuted;
+  return (
+    <View style={styles.eloBarWrap}>
+      <View style={[styles.eloBarTrack]}>
+        <View style={[styles.eloBarFill, { width: `${Math.round(pct * 100)}%` as any, backgroundColor: barColor }]} />
+      </View>
+      {label !== false && (
+        <Text style={styles.eloBarLabel}>ELO {strength}</Text>
+      )}
+    </View>
+  );
 }
 
-function StarRating({ stars }: { stars: number }) {
+// ─── Group match card (stateful score animation) ──────────────────────────────
+function GroupMatchCard({
+  fixture, homeTeam, awayTeam, result, isUserHome, isAnimating,
+  selectedNationId, onQuickSim, onLongSim,
+}: {
+  fixture: typeof GROUP_FIXTURES[number];
+  homeTeam: import('../types/simulator').Team | undefined;
+  awayTeam: import('../types/simulator').Team | undefined;
+  result: import('../types/matchResult').MatchResult | null;
+  isUserHome: boolean;
+  isAnimating: boolean;
+  selectedNationId: string;
+  onQuickSim: () => void;
+  onLongSim: () => void;
+}) {
+  const [dispHome, setDispHome] = useState(result?.homeScore ?? 0);
+  const [dispAway, setDispAway] = useState(result?.awayScore ?? 0);
+
+  useEffect(() => {
+    if (!result) { setDispHome(0); setDispAway(0); return; }
+    if (isAnimating) {
+      const c1 = animateScore(result.homeScore, setDispHome);
+      const c2 = animateScore(result.awayScore, setDispAway);
+      return () => { c1(); c2(); };
+    } else {
+      setDispHome(result.homeScore);
+      setDispAway(result.awayScore);
+    }
+  }, [result?.homeScore, result?.awayScore, isAnimating]);
+
+  if (!homeTeam || !awayTeam) return null;
+  const userScore = result ? (isUserHome ? result.homeScore : result.awayScore) : 0;
+  const oppScore  = result ? (isUserHome ? result.awayScore : result.homeScore) : 0;
+  const resultLabel = userScore > oppScore ? 'WIN ✓' : userScore < oppScore ? 'LOSS ✗' : 'DRAW';
+  const resultColor = userScore > oppScore ? COLORS.success : userScore < oppScore ? COLORS.danger : COLORS.warning;
+
   return (
-    <Text style={styles.stars}>
-      {'★'.repeat(stars)}{'☆'.repeat(5 - stars)}
-    </Text>
+    <View style={styles.matchCard}>
+      <View style={styles.matchCardHeader}>
+        <Text style={styles.matchMD}>MD{fixture.matchday}</Text>
+        <Text style={styles.matchDate}>{fixture.date}</Text>
+        <Text style={styles.matchVenue} numberOfLines={1}>{fixture.venue}</Text>
+      </View>
+      <View style={styles.matchTeams}>
+        <View style={styles.matchTeamSide}>
+          <PixelFlag isoCode={homeTeam.isoCode} size={24} />
+          <Text style={[styles.matchTeamName, homeTeam.id === selectedNationId && styles.matchTeamNameUser]} numberOfLines={1}>
+            {homeTeam.code3}
+          </Text>
+        </View>
+        <View style={styles.matchScoreBox}>
+          {result ? (
+            <Text style={styles.matchScore}>{dispHome} – {dispAway}</Text>
+          ) : (
+            <Text style={styles.matchVs}>VS</Text>
+          )}
+        </View>
+        <View style={[styles.matchTeamSide, styles.matchTeamRight]}>
+          <Text style={[styles.matchTeamName, awayTeam.id === selectedNationId && styles.matchTeamNameUser]} numberOfLines={1}>
+            {awayTeam.code3}
+          </Text>
+          <PixelFlag isoCode={awayTeam.isoCode} size={24} />
+        </View>
+      </View>
+      {!result && (
+        <View style={styles.matchBtns}>
+          <TouchableOpacity style={styles.longSimBtn} onPress={onLongSim} activeOpacity={0.8}>
+            <Text style={styles.longSimBtnText}>▶ LONG SIM</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.simBtn} onPress={onQuickSim} activeOpacity={0.8}>
+            <Text style={styles.simBtnText}>⚡ QUICK SIM</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {result && (
+        <View style={styles.matchResultBadge}>
+          <Text style={[styles.matchResultText, { color: resultColor }]}>{resultLabel}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -393,6 +481,29 @@ export default function TournamentScreen({ navigation }: Props) {
     });
   }, [userNextMatch, navigation]);
 
+  // ── Action: navigate to full simulator for a group/KO match ─────────────
+  const handleLongSim = useCallback((homeTeamId: string, awayTeamId: string, fixtureId: string) => {
+    (navigation as any).navigate('Simulator', { homeTeamId, awayTeamId, fixtureId });
+  }, [navigation]);
+
+  // ── Score animation: track which group fixture was just quick-simmed ──────
+  const [justSimmedGroupId, setJustSimmedGroupId] = useState<string | null>(null);
+
+  const handleSimulateGroupAnimated = useCallback((fixtureId: string) => {
+    handleSimulateGroup(fixtureId);
+    setJustSimmedGroupId(fixtureId);
+    setTimeout(() => setJustSimmedGroupId(null), 700);
+  }, [handleSimulateGroup]);
+
+  // ── Share result ──────────────────────────────────────────────────────────
+  const handleShare = useCallback(async (nationName: string) => {
+    try {
+      await Share.share({
+        message: `🏆 ${nationName} won the World Cup 2026! #Fitbolpix #WC2026`,
+      });
+    } catch (_) {}
+  }, []);
+
   // ── Action: start tournament ─────────────────────────────────────────────
   const [pickedNation, setPickedNation] = React.useState<string | null>(null);
 
@@ -461,9 +572,9 @@ export default function TournamentScreen({ navigation }: Props) {
                   onPress={() => setPickedNation(item.id)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.nationTileFlag}>{item.flag}</Text>
-                  <Text style={[styles.nationTileName, isSelected && styles.nationTileNameSel]} numberOfLines={2}>
-                    {item.name}
+                  <PixelFlag isoCode={item.isoCode} size={22} />
+                  <Text style={[styles.nationTileName, isSelected && styles.nationTileNameSel]} numberOfLines={1}>
+                    {item.code3}
                   </Text>
                 </TouchableOpacity>
               );
@@ -473,12 +584,11 @@ export default function TournamentScreen({ navigation }: Props) {
           {/* Selected nation detail card */}
           {pickedNation && NATIONS_BY_ID[pickedNation] && (
             <View style={styles.selectedCard}>
-              <Text style={styles.selectedCardFlag}>{NATIONS_BY_ID[pickedNation].flag}</Text>
+              <PixelFlag isoCode={NATIONS_BY_ID[pickedNation].isoCode} size={56} />
               <View style={styles.selectedCardInfo}>
                 <Text style={styles.selectedCardName}>{NATIONS_BY_ID[pickedNation].name}</Text>
                 <Text style={styles.selectedCardGroup}>Group {NATIONS_BY_ID[pickedNation].group}</Text>
-                <StarRating stars={eloToStars(NATIONS_BY_ID[pickedNation].strength)} />
-                <Text style={styles.selectedCardElo}>ELO {NATIONS_BY_ID[pickedNation].strength}</Text>
+                <EloBar strength={NATIONS_BY_ID[pickedNation].strength} />
               </View>
             </View>
           )}
@@ -511,9 +621,10 @@ export default function TournamentScreen({ navigation }: Props) {
           <Text style={styles.winnerTrophy}>🏆</Text>
           <Text style={styles.winnerTitle}>WORLD CUP</Text>
           <Text style={styles.winnerTitle2}>CHAMPIONS!</Text>
-          <Text style={styles.winnerNation}>
-            {userNation.flag}  {userNation.name.toUpperCase()}  {userNation.flag}
-          </Text>
+          <View style={styles.winnerFlagRow}>
+            <PixelFlag isoCode={userNation.isoCode} size={64} />
+          </View>
+          <Text style={styles.winnerNation}>{userNation.name.toUpperCase()}</Text>
           <Text style={styles.winnerSub}>WON THE WORLD CUP 2026!</Text>
 
           <View style={styles.statsCard}>
@@ -531,6 +642,13 @@ export default function TournamentScreen({ navigation }: Props) {
             </View>
           </View>
 
+          <TouchableOpacity
+            style={styles.shareBtn}
+            onPress={() => handleShare(userNation.name)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.shareBtnText}>📤  SHARE YOUR WIN</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.resetBtn} onPress={handleReset} activeOpacity={0.8}>
             <Text style={styles.resetBtnText}>🔄  PLAY AGAIN</Text>
           </TouchableOpacity>
@@ -672,58 +790,21 @@ export default function TournamentScreen({ navigation }: Props) {
             const awayTeam   = NATIONS_BY_ID[fixture.awayTeamId];
             const result     = results[fixture.id] ?? null;
             const isUserHome = fixture.homeTeamId === selectedNationId;
-            const opponent   = isUserHome ? awayTeam : homeTeam;
+            const isAnimating = justSimmedGroupId === fixture.id;
 
             return (
-              <View key={fixture.id} style={styles.matchCard}>
-                <View style={styles.matchCardHeader}>
-                  <Text style={styles.matchMD}>MD{fixture.matchday}</Text>
-                  <Text style={styles.matchDate}>{fixture.date}</Text>
-                  <Text style={styles.matchVenue} numberOfLines={1}>{fixture.venue}</Text>
-                </View>
-
-                <View style={styles.matchTeams}>
-                  <View style={styles.matchTeamSide}>
-                    <Text style={styles.matchTeamFlag}>{homeTeam?.flag}</Text>
-                    <Text style={styles.matchTeamName} numberOfLines={1}>{homeTeam?.name}</Text>
-                  </View>
-                  <View style={styles.matchScoreBox}>
-                    {result ? (
-                      <Text style={styles.matchScore}>{result.homeScore} – {result.awayScore}</Text>
-                    ) : (
-                      <Text style={styles.matchVs}>VS</Text>
-                    )}
-                  </View>
-                  <View style={[styles.matchTeamSide, styles.matchTeamRight]}>
-                    <Text style={styles.matchTeamName} numberOfLines={1}>{awayTeam?.name}</Text>
-                    <Text style={styles.matchTeamFlag}>{awayTeam?.flag}</Text>
-                  </View>
-                </View>
-
-                {!result && (
-                  <View style={styles.matchBtns}>
-                    <TouchableOpacity
-                      style={styles.simBtn}
-                      onPress={() => handleSimulateGroup(fixture.id)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.simBtnText}>⚡ SIMULATE</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {result && (
-                  <View style={styles.matchResultBadge}>
-                    {(() => {
-                      const userScore = isUserHome ? result.homeScore : result.awayScore;
-                      const oppScore  = isUserHome ? result.awayScore : result.homeScore;
-                      const label = userScore > oppScore ? 'WIN ✓' : userScore < oppScore ? 'LOSS ✗' : 'DRAW';
-                      const color = userScore > oppScore ? COLORS.success : userScore < oppScore ? COLORS.danger : COLORS.warning;
-                      return <Text style={[styles.matchResultText, { color }]}>{label}</Text>;
-                    })()}
-                  </View>
-                )}
-              </View>
+              <GroupMatchCard
+                key={fixture.id}
+                fixture={fixture}
+                homeTeam={homeTeam}
+                awayTeam={awayTeam}
+                result={result}
+                isUserHome={isUserHome}
+                isAnimating={isAnimating}
+                selectedNationId={selectedNationId!}
+                onQuickSim={() => handleSimulateGroupAnimated(fixture.id)}
+                onLongSim={() => handleLongSim(fixture.homeTeamId, fixture.awayTeamId, fixture.id)}
+              />
             );
           })}
 
@@ -817,15 +898,15 @@ export default function TournamentScreen({ navigation }: Props) {
 
                 <View style={styles.koMatchTeams}>
                   <View style={styles.koTeamSide}>
-                    <Text style={styles.koTeamFlag}>{userNation.flag}</Text>
+                    <PixelFlag isoCode={userNation.isoCode} size={40} />
                     <Text style={styles.koTeamName} numberOfLines={1}>{userNation.name}</Text>
-                    <StarRating stars={eloToStars(userNation.strength)} />
+                    <EloBar strength={userNation.strength} label={false} />
                   </View>
                   <Text style={styles.koVs}>VS</Text>
                   <View style={[styles.koTeamSide, styles.koTeamRight]}>
-                    <Text style={styles.koTeamFlag}>{opponent.flag}</Text>
+                    <PixelFlag isoCode={opponent.isoCode} size={40} />
                     <Text style={styles.koTeamName} numberOfLines={1}>{opponent.name}</Text>
-                    <StarRating stars={eloToStars(opponent.strength)} />
+                    <EloBar strength={opponent.strength} label={false} />
                   </View>
                 </View>
 
@@ -840,18 +921,29 @@ export default function TournamentScreen({ navigation }: Props) {
 
                 <View style={styles.koBtns}>
                   <TouchableOpacity
+                    style={styles.longSimBtn}
+                    onPress={() => handleLongSim(
+                      nextMatch.homeTeamId ?? '',
+                      nextMatch.awayTeamId ?? '',
+                      `ko-${nextMatch.def.id}`,
+                    )}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.longSimBtnText}>▶ LONG SIM</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     style={styles.koSimBtn}
                     onPress={handleSimulateKnockout}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.koSimBtnText}>⚡ SIMULATE</Text>
+                    <Text style={styles.koSimBtnText}>⚡ QUICK SIM</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.koPenBtn}
                     onPress={handlePlayPenalties}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.koPenBtnText}>⚽ PLAY PENALTIES</Text>
+                    <Text style={styles.koPenBtnText}>🥅 PENALTIES</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1027,11 +1119,19 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginTop: 2,
   },
-  stars: {
+  eloBarWrap:  { gap: 2, width: '100%' },
+  eloBarTrack: {
+    height: 4,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  eloBarFill:  { height: '100%', borderRadius: 2 },
+  eloBarLabel: {
     fontFamily: FONTS.body,
-    fontSize: 14,
-    color: COLORS.accent,
-    letterSpacing: 1,
+    fontSize: 10,
+    color: COLORS.textMuted,
   },
 
   beginBtn: {
@@ -1213,11 +1313,16 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
   },
+  matchTeamNameUser: {
+    fontFamily: FONTS.bodyBold,
+    color: COLORS.accent,
+  },
   matchScoreBox: { width: 70, alignItems: 'center' },
   matchScore: {
-    fontFamily: FONTS.heading,
-    fontSize: 22,
+    fontFamily: FONTS.pixel,
+    fontSize: 18,
     color: COLORS.accent,
+    letterSpacing: 2,
   },
   matchVs: {
     fontFamily: FONTS.bodyBold,
@@ -1228,6 +1333,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+  },
+  longSimBtn: {
+    flex: 1,
+    padding: SPACING.sm,
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: COLORS.border,
+    backgroundColor: COLORS.bgSurface,
+  },
+  longSimBtnText: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 11,
+    color: COLORS.textMuted,
   },
   simBtn: {
     flex: 1,
@@ -1240,7 +1358,7 @@ const styles = StyleSheet.create({
   simBtnText: {
     fontFamily: FONTS.bodyBold,
     fontSize: 11,
-    color: COLORS.textSecondary,
+    color: COLORS.warning,
   },
   playBtn: {
     flex: 1,
@@ -1462,6 +1580,21 @@ const styles = StyleSheet.create({
   winnerRoot:  { backgroundColor: '#060F0A' },
   winnerScroll: { padding: SPACING.md, alignItems: 'center', paddingBottom: 60 },
   winnerTrophy: { fontSize: 80, textAlign: 'center', marginTop: SPACING.lg },
+  winnerFlagRow: { alignItems: 'center', marginVertical: SPACING.sm },
+  shareBtn: {
+    backgroundColor: COLORS.accentTeal,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xl,
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  shareBtnText: {
+    fontFamily: FONTS.heading,
+    fontSize: 15,
+    color: COLORS.bgPrimary,
+    letterSpacing: 1,
+  },
   winnerTitle: {
     fontFamily: FONTS.heading,
     fontSize: 36,

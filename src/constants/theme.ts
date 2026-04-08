@@ -32,6 +32,7 @@ export const FONTS = {
   body:          'Inter_400Regular',
   bodyMedium:    'Inter_500Medium',
   bodyBold:      'Inter_700Bold',
+  pixel:         'Born2bSportyFS',
 };
 
 export const SPACING = {

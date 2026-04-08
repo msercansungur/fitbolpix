@@ -7,16 +7,21 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTournamentStore } from '../store/useTournamentStore';
 import { NATIONS_BY_ID } from '../constants/nations';
 import { GROUP_FIXTURES } from '../constants/fixtures';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
+import { RootStackParamList } from '../navigation/RootNavigator';
 import { COLORS, SPACING, FONTS, RADIUS } from '../constants/theme';
 import FitbolpixLogo from '../components/FitbolpixLogo';
 
-type HomeNavProp = BottomTabNavigationProp<BottomTabParamList, 'Home'>;
+type HomeNavProp = CompositeNavigationProp<
+  BottomTabNavigationProp<BottomTabParamList, 'Home'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
 
 const KICKOFF_DATE = new Date('2026-06-11T18:00:00Z'); // Opening ceremony / first match
 
@@ -81,8 +86,25 @@ export default function HomeScreen() {
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <FitbolpixLogo size="medium" />
-          <Text style={styles.subtitle}>World Cup 2026 Companion</Text>
+          <View style={styles.headerRow}>
+            <FitbolpixLogo size="medium" />
+            {/* Gear button → About */}
+            <TouchableOpacity
+              style={styles.gearBtn}
+              onPress={() => navigation.navigate('About')}
+              activeOpacity={0.7}
+            >
+              {/* Pixel gear: 5×5 cross pattern */}
+              {[[0,0,1,0,0],[0,1,1,1,0],[1,1,1,1,1],[0,1,1,1,0],[0,0,1,0,0]].map((row, r) => (
+                <View key={r} style={{ flexDirection: 'row' }}>
+                  {row.map((cell, c) => (
+                    <View key={c} style={[styles.gearPx, { backgroundColor: cell ? COLORS.textMuted : 'transparent' }]} />
+                  ))}
+                </View>
+              ))}
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.subtitle}>Experience the 2026 World Football Championship</Text>
         </View>
 
         {/* ── Continue Journey Banner ─────────────────────────────────────── */}
@@ -211,11 +233,25 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
     gap: SPACING.xs,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  gearBtn: {
+    position: 'absolute',
+    right: 0,
+    padding: SPACING.xs,
+  },
+  gearPx: { width: 3, height: 3 },
   subtitle: {
     fontFamily: FONTS.body,
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textSecondary,
     letterSpacing: 0.3,
+    textAlign: 'center',
   },
 
   // Journey banner
@@ -292,10 +328,10 @@ const styles = StyleSheet.create({
     minWidth: 60,
   },
   countNumber: {
-    fontFamily: FONTS.heading,
-    fontSize: 36,
+    fontFamily: FONTS.pixel,
+    fontSize: 32,
     color: COLORS.accent,
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
   countLabel: {
     fontFamily: FONTS.body,

@@ -14,10 +14,13 @@ export interface Team {
   id: string;
   name: string;
   flag: string;
+  isoCode: string;           // ISO alpha-2 for circle flag (e.g. 'tr', 'gb-eng')
+  code3: string;             // 3-char display code (e.g. 'TUR', 'FRA')
   strength: number;          // ELO rating (~1279–1877)
   group: string;             // 'A'–'L'
   penalty_skill?: number;    // 0–100: higher = slower accuracy ring = easier timing
   goalkeeper_rating?: number; // 0–100: higher = better penalty saves
+  formation?: string;         // e.g. '4-3-3', '4-4-2', '3-5-2', '4-2-3-1'
 }
 
 export interface MatchEvent {

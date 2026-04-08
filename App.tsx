@@ -1,5 +1,4 @@
 import React from 'react';
-import { View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -13,8 +12,8 @@ import {
   Inter_500Medium,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
-import BottomTabNavigator from './src/navigation/BottomTabNavigator';
-import { COLORS } from './src/constants/theme';
+import RootNavigator from './src/navigation/RootNavigator';
+import SplashScreen from './src/screens/SplashScreen';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -23,18 +22,18 @@ export default function App() {
     Inter_400Regular,
     Inter_500Medium,
     Inter_700Bold,
+    'Born2bSportyFS': require('./fonts/Born2bSportyFS.otf'),
   });
 
   if (!fontsLoaded) {
-    // Keep the dark background while fonts load — no flash of unstyled content
-    return <View style={{ flex: 1, backgroundColor: COLORS.bgPrimary }} />;
+    return <SplashScreen />;
   }
 
   return (
     <SafeAreaProvider>
       <NavigationContainer>
         <StatusBar style="light" />
-        <BottomTabNavigator />
+        <RootNavigator />
       </NavigationContainer>
     </SafeAreaProvider>
   );

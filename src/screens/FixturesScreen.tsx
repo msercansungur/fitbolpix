@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { GROUP_FIXTURES, GROUPS, fixturesByGroup } from '../constants/fixtures';
 import { NATIONS_BY_ID, NATIONS_BY_GROUP } from '../constants/nations';
 import { COLORS, SPACING, FONTS, RADIUS } from '../constants/theme';
+import PixelFlag from '../components/PixelFlag';
 import { Fixture } from '../types/fixture';
 import { Team } from '../types/simulator';
 import { useFixtureStore } from '../store/useFixtureStore';
@@ -123,8 +124,10 @@ function StandingRow({ row, rank }: { row: GroupRow; rank: number }) {
   return (
     <View style={[styles.tableRow, qualifies && styles.tableRowQualifies]}>
       <Text style={styles.tableRank}>{rank}</Text>
-      <Text style={styles.tableFlag}>{team?.flag ?? '🏳️'}</Text>
-      <Text style={styles.tableName} numberOfLines={1}>{team?.name ?? row.teamId}</Text>
+      <View style={styles.tableFlagWrap}>
+        {team ? <PixelFlag isoCode={team.isoCode} size={16} /> : <Text style={styles.tableFlag}>🏳️</Text>}
+      </View>
+      <Text style={styles.tableName} numberOfLines={1}>{team?.code3 ?? row.teamId}</Text>
       <Text style={styles.tableStat}>{row.played}</Text>
       <Text style={styles.tableStat}>{row.won}</Text>
       <Text style={styles.tableStat}>{row.drawn}</Text>
@@ -164,9 +167,9 @@ function FixtureCard({ fixture, liveResult, groupBadge }: {
 
         {/* Home */}
         <View style={styles.fixtureTeam}>
-          <Text style={styles.fixtureFlag}>{home.flag}</Text>
+          <PixelFlag isoCode={home.isoCode} size={22} />
           <Text style={[styles.fixtureTeamName, homeWinner && styles.fixtureTeamWinner]} numberOfLines={1}>
-            {home.name}
+            {home.code3}
           </Text>
         </View>
 
@@ -188,9 +191,9 @@ function FixtureCard({ fixture, liveResult, groupBadge }: {
         {/* Away */}
         <View style={[styles.fixtureTeam, styles.fixtureTeamRight]}>
           <Text style={[styles.fixtureTeamName, styles.fixtureTeamNameRight, awayWinner && styles.fixtureTeamWinner]} numberOfLines={1}>
-            {away.name}
+            {away.code3}
           </Text>
-          <Text style={styles.fixtureFlag}>{away.flag}</Text>
+          <PixelFlag isoCode={away.isoCode} size={22} />
         </View>
       </View>
 
@@ -205,10 +208,13 @@ function FixtureCard({ fixture, liveResult, groupBadge }: {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
+type GroupSubTab = 'fixtures' | 'stats';
+
 export default function FixturesScreen() {
   const [viewMode,      setViewMode]      = useState<ViewMode>('groups');
   const [activeGroup,   setActiveGroup]   = useState<string>('A');
   const [activeMatchday, setActiveMatchday] = useState<1 | 2 | 3>(1);
+  const [groupSubTab,   setGroupSubTab]   = useState<GroupSubTab>('fixtures');
 
   const { liveResults, isLoading, fetchResults } = useFixtureStore();
 
@@ -307,46 +313,73 @@ export default function FixturesScreen() {
 
       {/* ── GROUPS VIEW ──────────────────────────────────────────────────────── */}
       {viewMode === 'groups' && (
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-          <View style={styles.groupHeadingRow}>
-            <Text style={styles.sectionLabel}>GROUP {activeGroup}</Text>
-            <Text style={styles.progressLabel}>{finishedCount}/6 played</Text>
+        <>
+          {/* Sub-tab: Fixtures / Stats */}
+          <View style={styles.subTabBar}>
+            {(['fixtures', 'stats'] as GroupSubTab[]).map((t) => (
+              <TouchableOpacity
+                key={t}
+                style={[styles.subTab, groupSubTab === t && styles.subTabActive]}
+                onPress={() => setGroupSubTab(t)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.subTabText, groupSubTab === t && styles.subTabTextActive]}>
+                  {t === 'fixtures' ? 'FIXTURES' : 'STATS'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
-          {/* Standings table */}
-          <View style={styles.table}>
-            <View style={[styles.tableRow, styles.tableHeader]}>
-              <Text style={[styles.tableRank, styles.tableHeaderText]}>#</Text>
-              <Text style={[styles.tableFlag, styles.tableHeaderText]}> </Text>
-              <Text style={[styles.tableName, styles.tableHeaderText]}>Team</Text>
-              <Text style={[styles.tableStat, styles.tableHeaderText]}>P</Text>
-              <Text style={[styles.tableStat, styles.tableHeaderText]}>W</Text>
-              <Text style={[styles.tableStat, styles.tableHeaderText]}>D</Text>
-              <Text style={[styles.tableStat, styles.tableHeaderText]}>L</Text>
-              <Text style={[styles.tableStat, styles.tableHeaderText]}>GD</Text>
-              <Text style={[styles.tableStat, styles.tableStatPts, styles.tableHeaderText]}>Pts</Text>
+          <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+            <View style={styles.groupHeadingRow}>
+              <Text style={styles.sectionLabel}>GROUP {activeGroup}</Text>
+              <Text style={styles.progressLabel}>{finishedCount}/6 played</Text>
             </View>
-            {groupTeams.map((t, i) => {
-              const row = groupStandings.find((r) => r.teamId === t.id);
-              const blankRow: GroupRow = { teamId: t.id, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, pts: 0 };
-              return <StandingRow key={t.id} row={row ?? blankRow} rank={i + 1} />;
-            })}
-          </View>
 
-          {/* Fixtures by matchday */}
-          {([1, 2, 3] as const).map((md) => (
-            <View key={md}>
-              <Text style={styles.matchdayLabel}>Matchday {md}</Text>
-              {groupFixtures.filter((f) => f.matchday === md).map((fixture) => (
-                <FixtureCard
-                  key={fixture.id}
-                  fixture={fixture}
-                  liveResult={liveResults[fixture.id] ?? null}
-                />
-              ))}
+            {/* Standings table — always visible */}
+            <View style={styles.table}>
+              <View style={[styles.tableRow, styles.tableHeader]}>
+                <Text style={[styles.tableRank, styles.tableHeaderText]}>#</Text>
+                <View style={styles.tableFlagWrap} />
+                <Text style={[styles.tableName, styles.tableHeaderText]}>Team</Text>
+                <Text style={[styles.tableStat, styles.tableHeaderText]}>P</Text>
+                <Text style={[styles.tableStat, styles.tableHeaderText]}>W</Text>
+                <Text style={[styles.tableStat, styles.tableHeaderText]}>D</Text>
+                <Text style={[styles.tableStat, styles.tableHeaderText]}>L</Text>
+                <Text style={[styles.tableStat, styles.tableHeaderText]}>GD</Text>
+                <Text style={[styles.tableStat, styles.tableStatPts, styles.tableHeaderText]}>Pts</Text>
+              </View>
+              {groupTeams.map((t, i) => {
+                const row = groupStandings.find((r) => r.teamId === t.id);
+                const blankRow: GroupRow = { teamId: t.id, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, pts: 0 };
+                return <StandingRow key={t.id} row={row ?? blankRow} rank={i + 1} />;
+              })}
             </View>
-          ))}
-        </ScrollView>
+
+            {/* Fixtures sub-tab */}
+            {groupSubTab === 'fixtures' && ([1, 2, 3] as const).map((md) => (
+              <View key={md}>
+                <Text style={styles.matchdayLabel}>Matchday {md}</Text>
+                {groupFixtures.filter((f) => f.matchday === md).map((fixture) => (
+                  <FixtureCard
+                    key={fixture.id}
+                    fixture={fixture}
+                    liveResult={liveResults[fixture.id] ?? null}
+                  />
+                ))}
+              </View>
+            ))}
+
+            {/* Stats sub-tab placeholder */}
+            {groupSubTab === 'stats' && (
+              <View style={styles.statsPlaceholder}>
+                <Text style={styles.statsPlaceholderIcon}>📊</Text>
+                <Text style={styles.statsPlaceholderText}>Group stats coming soon</Text>
+                <Text style={styles.statsPlaceholderHint}>Top scorers, cards, and more</Text>
+              </View>
+            )}
+          </ScrollView>
+        </>
       )}
 
       {/* ── MATCHDAYS VIEW ───────────────────────────────────────────────────── */}
@@ -498,6 +531,7 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   tableFlag: { fontSize: 15, width: 24, marginRight: 4 },
+  tableFlagWrap: { width: 22, marginRight: 4, alignItems: 'center' as const },
   tableName: {
     flex: 1,
     fontFamily: FONTS.body,
@@ -580,10 +614,10 @@ const styles = StyleSheet.create({
   },
   fixtureScoreBox: { alignItems: 'center', paddingHorizontal: SPACING.sm },
   fixtureScore: {
-    fontFamily: FONTS.heading,
-    fontSize: 24,
+    fontFamily: FONTS.pixel,
+    fontSize: 18,
     color: COLORS.accent,
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
   fixtureScoreLabel: {
     fontFamily: FONTS.bodyBold,
@@ -609,6 +643,48 @@ const styles = StyleSheet.create({
   },
   fixtureVenue: {
     flex: 1,
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+
+  // Sub-tab (Fixtures / Stats)
+  subTabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.bgSurface,
+  },
+  subTab: {
+    flex: 1,
+    paddingVertical: SPACING.xs + 2,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  subTabActive: { borderBottomColor: COLORS.accent },
+  subTabText: {
+    fontFamily: FONTS.pixel,
+    fontSize: 11,
+    color: COLORS.textMuted,
+    letterSpacing: 1,
+  },
+  subTabTextActive: { color: COLORS.accent },
+
+  // Stats placeholder
+  statsPlaceholder: {
+    alignItems: 'center',
+    paddingVertical: SPACING.xl,
+    gap: SPACING.sm,
+  },
+  statsPlaceholderIcon: { fontSize: 40 },
+  statsPlaceholderText: {
+    fontFamily: FONTS.pixel,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    letterSpacing: 1,
+  },
+  statsPlaceholderHint: {
     fontFamily: FONTS.body,
     fontSize: 11,
     color: COLORS.textMuted,

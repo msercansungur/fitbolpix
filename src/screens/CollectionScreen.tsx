@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS, SPACING, FONTS, RADIUS } from '../constants/theme';
+import PageHeader from '../components/PageHeader';
 
 // ─── Section card data ────────────────────────────────────────────────────────
 
@@ -50,13 +51,8 @@ function SectionCard({
 export default function CollectionScreen() {
   return (
     <SafeAreaView style={styles.root}>
+      <PageHeader icon="🎴" title="COLLECTION" subtitle="World Cup 2026 Cards" />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.heading}>COLLECTION</Text>
-          <Text style={styles.subheading}>World Cup 2026 Cards</Text>
-        </View>
 
         {/* Section cards */}
         {SECTIONS.map((s) => (
