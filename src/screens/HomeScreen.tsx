@@ -17,6 +17,7 @@ import { BottomTabParamList } from '../navigation/BottomTabNavigator';
 import { RootStackParamList } from '../navigation/RootNavigator';
 import { COLORS, SPACING, FONTS, RADIUS } from '../constants/theme';
 import FitbolpixLogo from '../components/FitbolpixLogo';
+import { DID_YOU_KNOW } from '../constants/didYouKnow';
 
 type HomeNavProp = CompositeNavigationProp<
   BottomTabNavigationProp<BottomTabParamList, 'Home'>,
@@ -67,6 +68,9 @@ export default function HomeScreen() {
   const showBanner  = isActive && !isEliminated && !hasWon && selectedNationId != null;
   const nation      = selectedNationId ? NATIONS_BY_ID[selectedNationId] : null;
 
+  // Did You Know
+  const [factIndex, setFactIndex] = useState(() => Math.floor(Math.random() * DID_YOU_KNOW.length));
+
   // Live countdown
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -88,20 +92,13 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <FitbolpixLogo size="medium" />
-            {/* Gear button → About */}
+            {/* Settings button → About */}
             <TouchableOpacity
               style={styles.gearBtn}
               onPress={() => navigation.navigate('About')}
               activeOpacity={0.7}
             >
-              {/* Pixel gear: 5×5 cross pattern */}
-              {[[0,0,1,0,0],[0,1,1,1,0],[1,1,1,1,1],[0,1,1,1,0],[0,0,1,0,0]].map((row, r) => (
-                <View key={r} style={{ flexDirection: 'row' }}>
-                  {row.map((cell, c) => (
-                    <View key={c} style={[styles.gearPx, { backgroundColor: cell ? COLORS.textMuted : 'transparent' }]} />
-                  ))}
-                </View>
-              ))}
+              <Text style={styles.gearIcon}>⚙️</Text>
             </TouchableOpacity>
           </View>
           <Text style={styles.subtitle}>Experience the 2026 World Football Championship</Text>
@@ -210,6 +207,22 @@ export default function HomeScreen() {
           )}
         </View>
 
+        {/* ── Did You Know? ────────────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{'DID YOU KNOW? 🧠'}</Text>
+          <View style={styles.factCard}>
+            <Text style={styles.factEmoji}>⚽</Text>
+            <Text style={styles.factText}>{DID_YOU_KNOW[factIndex]}</Text>
+            <TouchableOpacity
+              style={styles.factButton}
+              onPress={() => setFactIndex(i => (i + 1) % DID_YOU_KNOW.length)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.factButtonText}>ANOTHER FACT →</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* ── Description ─────────────────────────────────────────────────── */}
         <Text style={styles.description}>
           Live scores · Match simulator · Tournament mode · Card collection
@@ -243,9 +256,18 @@ const styles = StyleSheet.create({
   gearBtn: {
     position: 'absolute',
     right: 0,
-    padding: SPACING.xs,
+    backgroundColor: COLORS.bgCard,
+    borderRadius: 6,
+    padding: 6,
+    minWidth: 28,
+    minHeight: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  gearPx: { width: 3, height: 3 },
+  gearIcon: {
+    fontSize: 18,
+    color: COLORS.textSecondary,
+  },
   subtitle: {
     fontFamily: FONTS.body,
     fontSize: 12,
@@ -306,9 +328,9 @@ const styles = StyleSheet.create({
   },
   countdownHeading: {
     fontFamily: FONTS.headingMedium,
-    fontSize: 11,
+    fontSize: 15,
     color: COLORS.textSecondary,
-    letterSpacing: 2,
+    letterSpacing: 3,
     marginBottom: SPACING.md,
   },
   countdownRow: {
@@ -329,13 +351,13 @@ const styles = StyleSheet.create({
   },
   countNumber: {
     fontFamily: FONTS.pixel,
-    fontSize: 32,
+    fontSize: 42,
     color: COLORS.accent,
     letterSpacing: 2,
   },
   countLabel: {
     fontFamily: FONTS.body,
-    fontSize: 10,
+    fontSize: 11,
     color: COLORS.textMuted,
     marginTop: 2,
     letterSpacing: 1,
@@ -357,9 +379,9 @@ const styles = StyleSheet.create({
   section:      { marginBottom: SPACING.lg },
   sectionTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 13,
+    fontSize: 15,
     color: COLORS.textSecondary,
-    letterSpacing: 2,
+    letterSpacing: 3,
     marginBottom: SPACING.sm,
   },
 
@@ -431,6 +453,38 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 11,
     color: COLORS.textMuted,
+  },
+
+  // Did You Know
+  factCard: {
+    backgroundColor: COLORS.bgCard,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 14,
+    position: 'relative',
+  },
+  factEmoji: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    fontSize: 16,
+  },
+  factText: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    lineHeight: 20,
+    paddingLeft: 24,
+  },
+  factButton: {
+    alignSelf: 'flex-end',
+    marginTop: 10,
+  },
+  factButtonText: {
+    fontFamily: FONTS.pixel,
+    fontSize: 11,
+    color: COLORS.accentTeal,
   },
 
   // Footer

@@ -10,7 +10,7 @@ import {
 import WebView, { WebViewMessageEvent } from 'react-native-webview';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
-import { COLORS, SPACING } from '../constants/theme';
+import { COLORS, SPACING, FONTS, RADIUS } from '../constants/theme';
 import { NATIONS, NATIONS_BY_ID } from '../constants/nations';
 import PageHeader from '../components/PageHeader';
 import { Team } from '../types/simulator';
@@ -154,6 +154,92 @@ function TeamPicker({
   );
 }
 
+// ─── Pixel art icons ──────────────────────────────────────────────────────────
+
+function GoalpostIcon({ color, size }: { color: string; size: number }) {
+  const postW = 4, barH = 4;
+  const postH = Math.floor(size * 0.6);
+  const innerW = size - postW * 2;
+  const netLines = 3;
+  const netGap = (postH - barH) / (netLines + 1);
+  return (
+    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+      {/* Crossbar */}
+      <View style={{ width: size - 4, height: barH, backgroundColor: color, borderRadius: 1 }} />
+      {/* Posts + net area */}
+      <View style={{ flexDirection: 'row', width: size - 4, height: postH - barH }}>
+        <View style={{ width: postW, backgroundColor: color }} />
+        <View style={{ flex: 1, position: 'relative' }}>
+          {Array.from({ length: netLines }).map((_, i) => (
+            <View
+              key={i}
+              style={{
+                position: 'absolute',
+                top: Math.floor(netGap * (i + 1)),
+                left: 2, right: 2,
+                height: 1,
+                backgroundColor: 'rgba(255,255,255,0.18)',
+              }}
+            />
+          ))}
+        </View>
+        <View style={{ width: postW, backgroundColor: color }} />
+      </View>
+    </View>
+  );
+}
+
+const SKULL_GRID = [
+  [0,1,1,1,1,1,0],
+  [1,1,1,1,1,1,1],
+  [1,0,1,1,1,0,1],
+  [1,1,1,1,1,1,1],
+  [1,1,0,1,0,1,1],
+  [0,1,1,1,1,1,0],
+  [0,1,0,1,0,1,0],
+];
+
+function SkullIcon({ size }: { size: number }) {
+  const px = Math.floor(size / 7);
+  return (
+    <View style={{ width: px * 7, height: px * 7 }}>
+      {SKULL_GRID.map((row, r) => (
+        <View key={r} style={{ flexDirection: 'row' }}>
+          {row.map((cell, c) => (
+            <View key={c} style={{ width: px, height: px, backgroundColor: cell ? '#E8E8E8' : 'transparent' }} />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const TROPHY_GRID = [
+  [0,1,1,1,1,1,0],
+  [0,1,1,1,1,1,0],
+  [0,0,1,1,1,0,0],
+  [0,0,1,1,1,0,0],
+  [0,0,0,1,0,0,0],
+  [0,0,0,1,0,0,0],
+  [0,0,1,1,1,0,0],
+  [0,1,1,1,1,1,0],
+];
+
+function TrophyIcon({ color, size }: { color: string; size: number }) {
+  const px = Math.floor(size / 8);
+  return (
+    <View style={{ width: px * 7, height: px * 8 }}>
+      {TROPHY_GRID.map((row, r) => (
+        <View key={r} style={{ flexDirection: 'row' }}>
+          {row.map((cell, c) => (
+            <View key={c} style={{ width: px, height: px, backgroundColor: cell ? color : 'transparent' }} />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // ─── Main Screen ───────────────────────────────────────────────────────────────
 export default function PenaltyWebViewScreen({ route }: Props) {
   const paramHome = route.params?.homeTeamId ?? null;
@@ -172,6 +258,9 @@ export default function PenaltyWebViewScreen({ route }: Props) {
   const [pickedAway,   setPickedAway]   = useState<string | null>(paramAway);
   const [mode,         setMode]         = useState<'best_of_5' | 'sudden_death'>(
     paramMode === 'sudden_death' ? 'sudden_death' : 'best_of_5',
+  );
+  const [selectedMode, setSelectedMode] = useState<'best_of_5' | 'sudden_death' | null>(
+    paramMode === 'sudden_death' ? 'sudden_death' : paramMode === 'best_of_5' ? 'best_of_5' : null,
   );
   const [setupPhase,   setSetupPhase]   = useState<'mode' | 'teams'>(
     paramHome && paramAway ? 'teams' : 'mode',
@@ -262,33 +351,75 @@ export default function PenaltyWebViewScreen({ route }: Props) {
       <SafeAreaView style={styles.root}>
         <PageHeader icon="🥅" title="PENALTY SHOOTOUT" subtitle="Choose match format" />
 
+        <View style={styles.modeContent}>
+          <Text style={styles.modeSubtitle}>SELECT YOUR MODE</Text>
 
-        <View style={styles.modeButtons}>
+          {/* Card 1: Best of 5 */}
           <TouchableOpacity
-            style={[styles.modeBtn, mode === 'best_of_5' && styles.modeBtnActive]}
-            onPress={() => setMode('best_of_5')}
+            style={[styles.modeCard, selectedMode === 'best_of_5' && { borderColor: '#94C952' }]}
+            onPress={() => setSelectedMode('best_of_5')}
             activeOpacity={0.8}
           >
-            <Text style={styles.modeBtnTitle}>BEST OF 5</Text>
-            <Text style={styles.modeBtnSub}>5 kicks each — classic shootout</Text>
+            <GoalpostIcon color="#94C952" size={40} />
+            <View style={styles.modeCardText}>
+              <Text style={styles.modeCardTitle}>BEST OF 5</Text>
+              <Text style={styles.modeCardSub}>5 kicks each — classic shootout</Text>
+              <View style={[styles.modeTag, { backgroundColor: 'rgba(148,201,82,0.2)' }]}>
+                <Text style={[styles.modeTagText, { color: '#94C952' }]}>CLASSIC</Text>
+              </View>
+            </View>
+            {selectedMode === 'best_of_5' && (
+              <Text style={[styles.modeCheck, { color: '#94C952' }]}>✓</Text>
+            )}
           </TouchableOpacity>
 
+          {/* Card 2: Sudden Death */}
           <TouchableOpacity
-            style={[styles.modeBtn, mode === 'sudden_death' && styles.modeBtnActive]}
-            onPress={() => setMode('sudden_death')}
+            style={[styles.modeCard, selectedMode === 'sudden_death' && { borderColor: '#C2340B' }]}
+            onPress={() => setSelectedMode('sudden_death')}
             activeOpacity={0.8}
           >
-            <Text style={styles.modeBtnTitle}>SUDDEN DEATH</Text>
-            <Text style={styles.modeBtnSub}>One miss and it's over</Text>
+            <SkullIcon size={40} />
+            <View style={styles.modeCardText}>
+              <Text style={styles.modeCardTitle}>SUDDEN DEATH</Text>
+              <Text style={styles.modeCardSub}>One miss and it's over</Text>
+              <View style={[styles.modeTag, { backgroundColor: 'rgba(194,52,11,0.2)' }]}>
+                <Text style={[styles.modeTagText, { color: '#C2340B' }]}>INTENSE</Text>
+              </View>
+            </View>
+            {selectedMode === 'sudden_death' && (
+              <Text style={[styles.modeCheck, { color: '#C2340B' }]}>✓</Text>
+            )}
           </TouchableOpacity>
+
+          {/* Card 3: Historical (coming soon — disabled) */}
+          <View style={[styles.modeCard, { opacity: 0.5 }]}>
+            <TrophyIcon color="#FACE43" size={40} />
+            <View style={styles.modeCardText}>
+              <Text style={[styles.modeCardTitle, { color: COLORS.textMuted }]}>HISTORICAL</Text>
+              <Text style={[styles.modeCardSub, { color: COLORS.textMuted }]}>Relive iconic WC shootouts</Text>
+              <View style={[styles.modeTag, { backgroundColor: 'rgba(250,206,67,0.2)' }]}>
+                <Text style={[styles.modeTagText, { color: '#FACE43' }]}>COMING SOON</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
+        {/* Next button */}
         <TouchableOpacity
-          style={styles.nextBtn}
-          onPress={() => setSetupPhase('teams')}
-          activeOpacity={0.8}
+          style={[styles.nextBtn, !selectedMode && styles.nextBtnDisabled]}
+          disabled={!selectedMode}
+          onPress={() => {
+            if (selectedMode) {
+              setMode(selectedMode);
+              setSetupPhase('teams');
+            }
+          }}
+          activeOpacity={selectedMode ? 0.8 : 1}
         >
-          <Text style={styles.nextBtnText}>NEXT: PICK TEAMS ▶</Text>
+          <Text style={[styles.nextBtnText, !selectedMode && styles.nextBtnTextDisabled]}>
+            NEXT: PICK TEAMS ▶
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -335,68 +466,85 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Headers
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    textAlign: 'center',
-    marginTop: SPACING.md,
-    letterSpacing: 2,
-  },
-  pageSub: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginBottom: SPACING.md,
-  },
-  changeMode: {
-    color: COLORS.primary,
-    textDecorationLine: 'underline',
-  },
-
   // Mode select
-  modeButtons: {
-    gap: SPACING.md,
+  modeContent: {
+    flex: 1,
     paddingHorizontal: SPACING.md,
-    marginTop: SPACING.md,
   },
-  modeBtn: {
-    backgroundColor: COLORS.bgSurface,
-    borderRadius: 10,
+  modeSubtitle: {
+    fontFamily: FONTS.pixel,
+    fontSize: 12,
+    color: COLORS.textMuted,
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginTop: 20,
+    marginBottom: 16,
+  },
+  modeCard: {
+    backgroundColor: COLORS.bgCard,
     borderWidth: 2,
     borderColor: COLORS.border,
-    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    padding: 20,
+    marginBottom: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    position: 'relative',
   },
-  modeBtnActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: `${COLORS.primary}18`,
+  modeCardText: {
+    flex: 1,
+    marginLeft: 16,
   },
-  modeBtnTitle: {
+  modeCardTitle: {
+    fontFamily: FONTS.pixel,
     fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    letterSpacing: 1,
+    color: COLORS.textPrimary,
   },
-  modeBtnSub: {
-    fontSize: 13,
+  modeCardSub: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 4,
   },
+  modeTag: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginTop: 8,
+  },
+  modeTagText: {
+    fontFamily: FONTS.pixel,
+    fontSize: 9,
+  },
+  modeCheck: {
+    position: 'absolute',
+    top: 10,
+    right: 14,
+    fontSize: 18,
+    fontFamily: FONTS.pixel,
+  },
   nextBtn: {
-    margin: SPACING.md,
-    marginTop: SPACING.xl,
+    marginHorizontal: SPACING.md,
+    marginBottom: 24,
+    height: 52,
     backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    padding: SPACING.md,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextBtnDisabled: {
+    backgroundColor: COLORS.bgCard,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   nextBtnText: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#000',
-    letterSpacing: 1,
+    fontFamily: FONTS.pixel,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  nextBtnTextDisabled: {
+    color: COLORS.textMuted,
   },
 
   // Team pickers

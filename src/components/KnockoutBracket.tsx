@@ -17,6 +17,7 @@ import { KNOCKOUT_MATCHES, ROUND_ORDERS } from '../constants/knockoutBracket';
 interface BracketActions {
   onQuickSim?: (match: ResolvedKnockoutMatch) => void;
   onSimulate?: (match: ResolvedKnockoutMatch) => void;
+  onReset?: (match: ResolvedKnockoutMatch) => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -68,10 +69,12 @@ function KnockoutMatchCard({
   match,
   onQuickSim,
   onSimulate,
+  onReset,
 }: {
   match: ResolvedKnockoutMatch;
   onQuickSim?: () => void;
   onSimulate?: () => void;
+  onReset?: () => void;
 }) {
   const { def, homeTeamId, awayTeamId, result } = match;
   const bothKnown = homeTeamId !== null && awayTeamId !== null;
@@ -114,25 +117,32 @@ function KnockoutMatchCard({
         {/* Action buttons — only rendered when callbacks are provided (Simulator tab) */}
         {bothKnown && (onQuickSim || onSimulate) && (
           <View style={styles.cardActions}>
-            {onQuickSim && (
-              <TouchableOpacity
-                style={styles.quickSimBtn}
-                onPress={onQuickSim}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.quickSimBtnText}>⚡</Text>
-              </TouchableOpacity>
-            )}
-            {onSimulate && (
-              <TouchableOpacity
-                style={[styles.simBtn, isPlayed && styles.simBtnPlayed]}
-                onPress={onSimulate}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.simBtnText, isPlayed && styles.simBtnTextPlayed]}>
-                  {isPlayed ? '↺' : '▶'}
-                </Text>
-              </TouchableOpacity>
+            {isPlayed ? (
+              <>
+                {onQuickSim && (
+                  <TouchableOpacity style={styles.quickSimBtn} onPress={onQuickSim} activeOpacity={0.75}>
+                    <Text style={styles.quickSimBtnText}>⚡</Text>
+                  </TouchableOpacity>
+                )}
+                {onReset && (
+                  <TouchableOpacity style={[styles.simBtn, styles.simBtnPlayed]} onPress={onReset} activeOpacity={0.75}>
+                    <Text style={[styles.simBtnText, styles.simBtnTextPlayed]}>↺</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              <>
+                {onSimulate && (
+                  <TouchableOpacity style={styles.simBtn} onPress={onSimulate} activeOpacity={0.75}>
+                    <Text style={styles.simBtnText}>▶</Text>
+                  </TouchableOpacity>
+                )}
+                {onQuickSim && (
+                  <TouchableOpacity style={styles.quickSimBtn} onPress={onQuickSim} activeOpacity={0.75}>
+                    <Text style={styles.quickSimBtnText}>⚡</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
         )}
@@ -192,6 +202,7 @@ function BracketColumn({
                 match={match}
                 onQuickSim={actions.onQuickSim ? () => actions.onQuickSim!(match) : undefined}
                 onSimulate={actions.onSimulate ? () => actions.onSimulate!(match) : undefined}
+                onReset={actions.onReset ? () => actions.onReset!(match) : undefined}
               />
             </View>
           );
@@ -207,11 +218,12 @@ interface KnockoutBracketProps {
   resolved: ResolvedKnockoutMatch[];
   onQuickSim?: (match: ResolvedKnockoutMatch) => void;
   onSimulate?: (match: ResolvedKnockoutMatch) => void;
+  onReset?: (match: ResolvedKnockoutMatch) => void;
 }
 
-export default function KnockoutBracket({ resolved, onQuickSim, onSimulate }: KnockoutBracketProps) {
+export default function KnockoutBracket({ resolved, onQuickSim, onSimulate, onReset }: KnockoutBracketProps) {
   const resolvedMap = new Map(resolved.map((m) => [m.def.id, m]));
-  const actions: BracketActions = { onQuickSim, onSimulate };
+  const actions: BracketActions = { onQuickSim, onSimulate, onReset };
 
   const rounds: { round: KnockoutRound; order: number[] }[] = [
     { round: 'R32',   order: ROUND_ORDERS['R32']  },
@@ -219,16 +231,15 @@ export default function KnockoutBracket({ resolved, onQuickSim, onSimulate }: Kn
     { round: 'QF',    order: ROUND_ORDERS['QF']   },
     { round: 'SF',    order: ROUND_ORDERS['SF']   },
     { round: 'Final', order: [104]                 },
+    { round: '3rd',   order: [103]                 },
   ];
-
-  const thirdMatch = resolvedMap.get(103);
 
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.outerScroll}
     >
-      {/* Bracket columns — horizontal scroll */}
+      {/* Bracket columns — horizontal scroll: R32 → R16 → QF → SF → Final → 3rd Place */}
       <ScrollView
         horizontal
         nestedScrollEnabled
@@ -247,20 +258,6 @@ export default function KnockoutBracket({ resolved, onQuickSim, onSimulate }: Kn
           ))}
         </View>
       </ScrollView>
-
-      {/* Third-place match — below the horizontal bracket, reachable by vertical scroll */}
-      {thirdMatch && (
-        <View style={styles.thirdPlaceRow}>
-          <Text style={[styles.colLabel, { color: ROUND_ACCENT['3rd'] }]}>
-            {ROUND_LABELS['3rd']}
-          </Text>
-          <KnockoutMatchCard
-            match={thirdMatch}
-            onQuickSim={actions.onQuickSim ? () => actions.onQuickSim!(thirdMatch) : undefined}
-            onSimulate={actions.onSimulate ? () => actions.onSimulate!(thirdMatch) : undefined}
-          />
-        </View>
-      )}
     </ScrollView>
   );
 }

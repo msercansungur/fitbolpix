@@ -28,11 +28,13 @@ import {
 import { simulateMatch, computeScore } from '../utils/simulator';
 import { resolveKnockoutBracket } from '../utils/knockoutEngine';
 import { ResolvedKnockoutMatch } from '../types/knockout';
+import { KNOCKOUT_MATCHES } from '../constants/knockoutBracket';
 import { MatchResult } from '../types/matchResult';
 import KnockoutBracket from '../components/KnockoutBracket';
 import PixelFlag from '../components/PixelFlag';
 import { animateScore } from '../utils/scoreAnimation';
 import { getMatchSimHTML, MatchSimConfig } from '../assets/match-sim/matchSim';
+import { resolveKitColors } from '../utils/kitColors';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -174,11 +176,13 @@ function TourneyStandingRow({ team, standing, rank }: {
 
 // ─── Tournament — Fixture card with sim buttons ───────────────────────────────
 
-function TourneyFixtureCard({ fixture, result, groupBadge, onQuickSim, animating }: {
+function TourneyFixtureCard({ fixture, result, groupBadge, onQuickSim, onLongSim, onReset, animating }: {
   fixture: typeof GROUP_FIXTURES[number];
   result: MatchResult | null;
   groupBadge?: string;
   onQuickSim: () => void;
+  onLongSim?: () => void;
+  onReset?: () => void;
   animating?: boolean;
 }) {
   const home = NATIONS_BY_ID[fixture.homeTeamId];
@@ -233,9 +237,29 @@ function TourneyFixtureCard({ fixture, result, groupBadge, onQuickSim, animating
       <View style={styles.fixtureMeta}>
         <Text style={styles.fixtureDate}>{formatDate(fixture.date)}</Text>
         <Text style={styles.fixtureVenue} numberOfLines={1}>{fixture.venue}</Text>
-        <TouchableOpacity style={styles.quickSimBtn} onPress={onQuickSim} activeOpacity={0.75}>
-          <Text style={styles.quickSimBtnText}>{isPlayed ? '↺ RE-SIM' : '⚡ SIM'}</Text>
-        </TouchableOpacity>
+        {isPlayed ? (
+          <View style={styles.fixtureMetaBtns}>
+            <TouchableOpacity style={styles.quickSimBtn} onPress={onQuickSim} activeOpacity={0.75}>
+              <Text style={styles.quickSimBtnText}>⚡ RE-SIM</Text>
+            </TouchableOpacity>
+            {onReset && (
+              <TouchableOpacity style={styles.resetSimBtn} onPress={onReset} activeOpacity={0.75}>
+                <Text style={styles.resetSimBtnText}>↺</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View style={styles.fixtureMetaBtns}>
+            {onLongSim && (
+              <TouchableOpacity style={styles.longSimSmBtn} onPress={onLongSim} activeOpacity={0.75}>
+                <Text style={styles.longSimSmBtnText}>▶</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.quickSimBtn} onPress={onQuickSim} activeOpacity={0.75}>
+              <Text style={styles.quickSimBtnText}>⚡ SIM</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -451,6 +475,135 @@ export default function SimulatorScreen({ route }: Props) {
     ]);
   }, [clearAll]);
 
+  // ── Tournament sim overlay (Long Sim for group + knockout) ────────────────
+  const [tourneyOverlay, setTourneyOverlay] = useState<{
+    key: string; html: string;
+    homeTeamId: string; awayTeamId: string;
+    fixtureId?: string; matchId?: number;
+    simScore: { home: number; away: number };
+    simEvents: MatchEvent[];
+    contextLabel: string; teamsLabel: string;
+  } | null>(null);
+
+  const handleTourneyLongSim = useCallback((fixture: typeof GROUP_FIXTURES[number]) => {
+    const home = NATIONS_BY_ID[fixture.homeTeamId];
+    const away = NATIONS_BY_ID[fixture.awayTeamId];
+    if (!home || !away) return;
+    const events = simulateMatch(home, away, 'en');
+    const score  = computeScore(events, home.id, away.id);
+    const { homeColor, awayColor } = resolveKitColors(home.id, away.id, KIT_COLORS);
+    const config: MatchSimConfig = {
+      homeId: home.id, homeName: home.name, homeCode: home.code3,
+      homeColor, homeStrength: home.strength, homeFormation: home.formation ?? '4-4-2',
+      awayId: away.id, awayName: away.name, awayCode: away.code3,
+      awayColor, awayStrength: away.strength, awayFormation: away.formation ?? '4-4-2',
+      events: events.map((e) => ({ type: e.type, teamId: e.teamId, minute: e.minute })),
+      seed: Date.now() % 99991,
+    };
+    setTourneyOverlay({
+      key: `tsim-grp-${fixture.id}-${Date.now()}`,
+      html: getMatchSimHTML(config),
+      homeTeamId: home.id, awayTeamId: away.id,
+      fixtureId: fixture.id, simScore: score, simEvents: events,
+      contextLabel: `GROUP ${fixture.group} · MATCHDAY ${fixture.matchday}`,
+      teamsLabel: `${home.code3} vs ${away.code3}`,
+    });
+  }, []);
+
+  const handleKnockoutLongSim = useCallback((match: ResolvedKnockoutMatch) => {
+    if (!match.homeTeamId || !match.awayTeamId) return;
+    const home = NATIONS_BY_ID[match.homeTeamId];
+    const away = NATIONS_BY_ID[match.awayTeamId];
+    if (!home || !away) return;
+    const events = simulateMatch(home, away, 'en');
+    const score  = computeScore(events, home.id, away.id);
+    const { homeColor, awayColor } = resolveKitColors(home.id, away.id, KIT_COLORS);
+    const config: MatchSimConfig = {
+      homeId: home.id, homeName: home.name, homeCode: home.code3,
+      homeColor, homeStrength: home.strength, homeFormation: home.formation ?? '4-4-2',
+      awayId: away.id, awayName: away.name, awayCode: away.code3,
+      awayColor, awayStrength: away.strength, awayFormation: away.formation ?? '4-4-2',
+      events: events.map((e) => ({ type: e.type, teamId: e.teamId, minute: e.minute })),
+      seed: Date.now() % 99991,
+    };
+    setTourneyOverlay({
+      key: `tsim-ko-${match.def.id}-${Date.now()}`,
+      html: getMatchSimHTML(config),
+      homeTeamId: home.id, awayTeamId: away.id,
+      matchId: match.def.id, simScore: score, simEvents: events,
+      contextLabel: `KNOCKOUT · ${match.def.round}`,
+      teamsLabel: `${home.code3} vs ${away.code3}`,
+    });
+  }, []);
+
+  const handleTourneyOverlayMessage = useCallback((event: WebViewMessageEvent) => {
+    try {
+      const msg = JSON.parse(event.nativeEvent.data);
+      if (msg.type !== 'MATCH_RESULT') return;
+      const ov = tourneyOverlay;
+      if (!ov) return;
+      if (ov.fixtureId && !ov.matchId) {
+        // Group fixture
+        useSimulatorStore.getState().saveResult({
+          fixtureId: ov.fixtureId, homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
+          homeScore: ov.simScore.home, awayScore: ov.simScore.away,
+          events: ov.simEvents, simulatedAt: Date.now(),
+        });
+      } else if (ov.matchId != null) {
+        // Knockout — draw gets home +1
+        const hs = ov.simScore.home === ov.simScore.away ? ov.simScore.home + 1 : ov.simScore.home;
+        useSimulatorStore.getState().saveKnockoutResult({
+          matchId: ov.matchId, homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
+          homeScore: hs, awayScore: ov.simScore.away,
+          events: ov.simEvents, simulatedAt: Date.now(),
+        });
+      }
+      setTourneyOverlay(null);
+    } catch (_) {}
+  }, [tourneyOverlay]);
+
+  // ── Group fixture reset ───────────────────────────────────────────────────
+  const handleResetGroupFixture = useCallback((fixtureId: string) => {
+    const fixture = GROUP_FIXTURES.find((f) => f.id === fixtureId);
+    if (!fixture) return;
+    const group = fixture.group;
+    const currentResults = useSimulatorStore.getState().results;
+    const gFixtures = GROUP_FIXTURES.filter((f) => f.group === group);
+    const otherResults = gFixtures
+      .filter((f) => f.id !== fixtureId && currentResults[f.id])
+      .map((f) => currentResults[f.id]);
+    useSimulatorStore.getState().clearGroupResults(group);
+    for (const r of otherResults) {
+      useSimulatorStore.getState().saveResult(r);
+    }
+  }, []);
+
+  // ── Knockout match reset with cascade ─────────────────────────────────────
+  const handleResetKnockoutMatch = useCallback((match: ResolvedKnockoutMatch) => {
+    // Build forward-dependency graph: matchId → set of downstream matchIds
+    const dependents = new Set<number>();
+    const queue = [match.def.id];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      dependents.add(current);
+      for (const m of KNOCKOUT_MATCHES) {
+        if (dependents.has(m.id)) continue;
+        const refs = [m.homeSource, m.awaySource];
+        for (const src of refs) {
+          if ((src.kind === 'winner' || src.kind === 'loser') && src.matchId === current) {
+            queue.push(m.id);
+          }
+        }
+      }
+    }
+    // Remove all dependent knockout results
+    useSimulatorStore.setState((state) => {
+      const newKO = { ...state.knockoutResults };
+      dependents.forEach((id) => { delete newKO[id]; });
+      return { knockoutResults: newKO };
+    });
+  }, []);
+
   // ── WebView match handlers ─────────────────────────────────────────────────
   const handleKickOff = useCallback(() => {
     const home = state.homeTeam;
@@ -462,17 +615,18 @@ export default function SimulatorScreen({ route }: Props) {
 
     pendingMatchRef.current = { homeTeam: home, awayTeam: away, homeScore: score.home, awayScore: score.away, events };
 
+    const resolved = resolveKitColors(home.id, away.id, KIT_COLORS);
     const config: MatchSimConfig = {
       homeId:         home.id,
       homeName:       home.name,
       homeCode:       home.code3,
-      homeColor:      KIT_COLORS[home.id] ?? 0x2196f3,
+      homeColor:      resolved.homeColor,
       homeStrength:   home.strength,
       homeFormation:  home.formation ?? '4-4-2',
       awayId:         away.id,
       awayName:       away.name,
       awayCode:       away.code3,
-      awayColor:      KIT_COLORS[away.id] ?? 0xf44336,
+      awayColor:      resolved.awayColor,
       awayStrength:   away.strength,
       awayFormation:  away.formation ?? '4-4-2',
       events: events.map((e) => ({ type: e.type, teamId: e.teamId, minute: e.minute })),
@@ -820,6 +974,8 @@ export default function SimulatorScreen({ route }: Props) {
                     fixture={fixture}
                     result={selectSimResult(results, fixture.id)}
                     onQuickSim={() => handleQuickSim(fixture)}
+                    onLongSim={() => handleTourneyLongSim(fixture)}
+                    onReset={() => handleResetGroupFixture(fixture.id)}
                     animating={justSimmedId === fixture.id}
                   />
                 ))}
@@ -857,6 +1013,8 @@ export default function SimulatorScreen({ route }: Props) {
               result={selectSimResult(results, fixture.id)}
               groupBadge={`Group ${fixture.group}`}
               onQuickSim={() => handleQuickSim(fixture)}
+              onLongSim={() => handleTourneyLongSim(fixture)}
+              onReset={() => handleResetGroupFixture(fixture.id)}
               animating={justSimmedId === fixture.id}
             />
           ))}
@@ -869,7 +1027,8 @@ export default function SimulatorScreen({ route }: Props) {
           <KnockoutBracket
             resolved={resolvedBracket}
             onQuickSim={handleKnockoutQuickSim}
-            onSimulate={handleKnockoutQuickSim}
+            onSimulate={handleKnockoutLongSim}
+            onReset={handleResetKnockoutMatch}
           />
         </View>
       )}
@@ -883,6 +1042,32 @@ export default function SimulatorScreen({ route }: Props) {
           <Text style={styles.resetBtnText}>🗑</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Tournament sim overlay (Long Sim WebView) */}
+      {tourneyOverlay && (
+        <View style={styles.tourneyOverlay}>
+          <View style={styles.tourneyOverlayHeader}>
+            <Text style={styles.tourneyOverlayContext}>{tourneyOverlay.contextLabel}</Text>
+            <Text style={styles.tourneyOverlayTeams}>{tourneyOverlay.teamsLabel}</Text>
+            <TouchableOpacity onPress={() => setTourneyOverlay(null)} style={styles.tourneyOverlayClose} activeOpacity={0.7}>
+              <Text style={styles.tourneyOverlayCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <WebView
+            key={tourneyOverlay.key}
+            source={{ html: tourneyOverlay.html }}
+            style={{ flex: 1 }}
+            javaScriptEnabled
+            originWhitelist={['*']}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            scrollEnabled={false}
+            bounces={false}
+            overScrollMode="never"
+            onMessage={handleTourneyOverlayMessage}
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -1159,6 +1344,76 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyBold,
     fontSize: 11,
     color: COLORS.warning,
+  },
+  fixtureMetaBtns: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  longSimSmBtn: {
+    backgroundColor: COLORS.bgSurface,
+    borderRadius: RADIUS.sm,
+    paddingVertical: 4,
+    paddingHorizontal: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  longSimSmBtnText: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 11,
+    color: COLORS.primary,
+  },
+  resetSimBtn: {
+    backgroundColor: COLORS.bgSurface,
+    borderRadius: RADIUS.sm,
+    paddingVertical: 4,
+    paddingHorizontal: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.textMuted,
+  },
+  resetSimBtnText: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+
+  // Tournament sim overlay
+  tourneyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+    backgroundColor: '#000',
+  },
+  tourneyOverlayHeader: {
+    height: 44,
+    backgroundColor: COLORS.bgPrimary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  tourneyOverlayContext: {
+    fontFamily: FONTS.pixel,
+    fontSize: 10,
+    color: COLORS.accent,
+    letterSpacing: 1,
+    flex: 1,
+  },
+  tourneyOverlayTeams: {
+    fontFamily: FONTS.heading,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    flex: 1,
+  },
+  tourneyOverlayClose: {
+    flex: 1,
+    alignItems: 'flex-end',
+    paddingRight: 4,
+  },
+  tourneyOverlayCloseText: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 16,
+    color: '#ffffff',
   },
 
   // Bottom action bar

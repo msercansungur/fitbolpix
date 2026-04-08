@@ -12,6 +12,7 @@ import {
   Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import WebView, { WebViewMessageEvent } from 'react-native-webview';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
 import { COLORS, SPACING, FONTS, RADIUS } from '../constants/theme';
@@ -23,10 +24,79 @@ import { resolveKnockoutBracket, getBestThirdPlacers } from '../utils/knockoutEn
 import { simulateMatch, computeScore } from '../utils/simulator';
 import { TeamStanding } from '../types/matchResult';
 import { KnockoutRound } from '../types/knockout';
+import { Team } from '../types/simulator';
 import PixelFlag from '../components/PixelFlag';
 import { animateScore } from '../utils/scoreAnimation';
+import { PENALTY_GAME_HTML } from '../assets/penalty-game/penaltyGame';
+import { getMatchSimHTML, MatchSimConfig } from '../assets/match-sim/matchSim';
+import { resolveKitColors } from '../utils/kitColors';
 
 type Props = BottomTabScreenProps<BottomTabParamList, 'Tournament'>;
+
+// ─── Kit colours for penalty/sim WebView config ──────────────────────────────
+const KIT_COLORS: Record<string, number> = {
+  mex:0x006847,rsa:0x007A4D,kor:0xC60C30,cze:0xD7141A,
+  can:0xFF0000,bih:0x002395,qat:0x8D1B3D,swi:0xFF0000,
+  bra:0xF7D116,mor:0xC1272D,hai:0x00209F,sco:0x003078,
+  usa:0x002868,par:0xD52B1E,aus:0xFFD700,tur:0xE30A17,
+  ger:0xFFFFFF,cur:0x003DA5,civ:0xF77F00,ecua:0xFFD100,
+  ned:0xFF6200,jpn:0x002B7F,swe:0x006AA7,tun:0xE70013,
+  bel:0xED2939,egy:0xC8102E,iri:0x239F40,nzl:0x000000,
+  spa:0xAA151B,cpv:0x003893,ksa:0x006C35,uru:0x5EB6E4,
+  fra:0x002395,sen:0x00853F,irq:0x007A3D,nor:0xEF2B2D,
+  arg:0x74ACDF,alg:0x006233,aut:0xED2939,jor:0x007A3D,
+  por:0x006600,cod:0x007FFF,uzb:0x1EB53A,col:0xFCD116,
+  eng:0xFFFFFF,cro:0xFF0000,gha:0x006B3F,pan:0xD21034,
+};
+
+function buildPenaltyConfig(home: Team, away: Team, mode: 'best_of_5' | 'sudden_death', userTeam: 'home' | 'away'): string {
+  const { homeColor, awayColor } = resolveKitColors(home.id, away.id, KIT_COLORS);
+  const cfg = {
+    homeTeam: { id:home.id, name:home.name, flag:home.flag, kitColor:homeColor, penalty_skill:home.penalty_skill??65, goalkeeper_rating:home.goalkeeper_rating??65 },
+    awayTeam: { id:away.id, name:away.name, flag:away.flag, kitColor:awayColor, penalty_skill:away.penalty_skill??65, goalkeeper_rating:away.goalkeeper_rating??65 },
+    mode, userTeam,
+  };
+  return `window.GAME_CONFIG = ${JSON.stringify(cfg)}; true;`;
+}
+
+function buildSimConfig(home: Team, away: Team): { html: string; events: ReturnType<typeof simulateMatch>; score: { home: number; away: number } } {
+  const events = simulateMatch(home, away, 'en');
+  const score  = computeScore(events, home.id, away.id);
+  const { homeColor, awayColor } = resolveKitColors(home.id, away.id, KIT_COLORS);
+  const config: MatchSimConfig = {
+    homeId: home.id, homeName: home.name, homeCode: home.code3,
+    homeColor, homeStrength: home.strength, homeFormation: home.formation ?? '4-4-2',
+    awayId: away.id, awayName: away.name, awayCode: away.code3,
+    awayColor, awayStrength: away.strength, awayFormation: away.formation ?? '4-4-2',
+    events: events.map((e) => ({ type: e.type, teamId: e.teamId, minute: e.minute })),
+    seed: Date.now() % 99991,
+  };
+  return { html: getMatchSimHTML(config), events, score };
+}
+
+// ─── Overlay state types ─────────────────────────────────────────────────────
+type PenaltyOverlay = {
+  key: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  mode: 'best_of_5' | 'sudden_death';
+  userTeam: 'home' | 'away';
+  fixtureId?: string;      // group fixture id
+  matchId?: number;         // knockout match id
+};
+
+type SimOverlay = {
+  key: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  html: string;
+  fixtureId?: string;
+  matchId?: number;
+  simScore: { home: number; away: number };
+  simEvents: import('../types/simulator').MatchEvent[];
+  contextLabel?: string;  // e.g. "GROUP D · MATCHDAY 1"
+  teamsLabel?: string;    // e.g. "AUS vs TUR"
+};
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -63,7 +133,8 @@ function EloBar({ strength, label }: { strength: number; label?: boolean }) {
 // ─── Group match card (stateful score animation) ──────────────────────────────
 function GroupMatchCard({
   fixture, homeTeam, awayTeam, result, isUserHome, isAnimating,
-  selectedNationId, onQuickSim, onLongSim,
+  selectedNationId, onQuickSim, onLongSim, onPenalties, onReset,
+  showReset = true, locked = false,
 }: {
   fixture: typeof GROUP_FIXTURES[number];
   homeTeam: import('../types/simulator').Team | undefined;
@@ -74,6 +145,10 @@ function GroupMatchCard({
   selectedNationId: string;
   onQuickSim: () => void;
   onLongSim: () => void;
+  onPenalties: () => void;
+  onReset: () => void;
+  showReset?: boolean;
+  locked?: boolean;
 }) {
   const [dispHome, setDispHome] = useState(result?.homeScore ?? 0);
   const [dispAway, setDispAway] = useState(result?.awayScore ?? 0);
@@ -124,7 +199,7 @@ function GroupMatchCard({
           <PixelFlag isoCode={awayTeam.isoCode} size={24} />
         </View>
       </View>
-      {!result && (
+      {!result && !locked && (
         <View style={styles.matchBtns}>
           <TouchableOpacity style={styles.longSimBtn} onPress={onLongSim} activeOpacity={0.8}>
             <Text style={styles.longSimBtnText}>▶ LONG SIM</Text>
@@ -132,11 +207,24 @@ function GroupMatchCard({
           <TouchableOpacity style={styles.simBtn} onPress={onQuickSim} activeOpacity={0.8}>
             <Text style={styles.simBtnText}>⚡ QUICK SIM</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.playBtn} onPress={onPenalties} activeOpacity={0.8}>
+            <Text style={styles.playBtnText}>🥅 PENALTIES</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {!result && locked && (
+        <View style={styles.matchLockedRow}>
+          <Text style={styles.matchLockedText}>🔒 Play previous matchday first</Text>
         </View>
       )}
       {result && (
-        <View style={styles.matchResultBadge}>
+        <View style={styles.matchResultRow}>
           <Text style={[styles.matchResultText, { color: resultColor }]}>{resultLabel}</Text>
+          {showReset && (
+            <TouchableOpacity onPress={onReset} activeOpacity={0.7}>
+              <Text style={styles.resetMatchText}>↺ RESET</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -469,22 +557,6 @@ export default function TournamentScreen({ navigation }: Props) {
     }
   }, [userNextMatch, selectedNationId]);
 
-  // ── Action: play knockout via Penalty screen ─────────────────────────────
-  const handlePlayPenalties = useCallback(() => {
-    if (!userNextMatch) return;
-    const { def, homeTeamId, awayTeamId } = userNextMatch;
-    if (!homeTeamId || !awayTeamId) return;
-    (navigation as any).navigate('Penalty', {
-      homeTeamId,
-      awayTeamId,
-      fixtureId: `ko-${def.id}`,
-    });
-  }, [userNextMatch, navigation]);
-
-  // ── Action: navigate to full simulator for a group/KO match ─────────────
-  const handleLongSim = useCallback((homeTeamId: string, awayTeamId: string, fixtureId: string) => {
-    (navigation as any).navigate('Simulator', { homeTeamId, awayTeamId, fixtureId });
-  }, [navigation]);
 
   // ── Score animation: track which group fixture was just quick-simmed ──────
   const [justSimmedGroupId, setJustSimmedGroupId] = useState<string | null>(null);
@@ -545,6 +617,232 @@ export default function TournamentScreen({ navigation }: Props) {
       ],
     );
   }, [clearAllResults, clearAllKnockoutResults, resetTournament]);
+
+  // ── Overlay state (inline WebViews for sim + penalty) ─────────────────
+  const [penOverlay, setPenOverlay] = useState<PenaltyOverlay | null>(null);
+  const [simOverlay, setSimOverlay] = useState<SimOverlay | null>(null);
+
+  // ── Helper: auto-sim all resolvable KO matches (not involving user) ──
+  const autoSimKnockout = useCallback(() => {
+    for (let pass = 0; pass < 32; pass++) {
+      const s        = useTournamentMatchStore.getState();
+      const resolved = resolveKnockoutBracket(s.standings, s.results, s.knockoutResults);
+      let simmedAny  = false;
+      for (const match of resolved) {
+        if (
+          match.homeTeamId && match.awayTeamId &&
+          !s.knockoutResults[match.def.id] &&
+          match.homeTeamId !== selectedNationId &&
+          match.awayTeamId !== selectedNationId
+        ) {
+          const h = NATIONS_BY_ID[match.homeTeamId];
+          const a = NATIONS_BY_ID[match.awayTeamId];
+          if (!h || !a) continue;
+          const evts = simulateMatch(h, a, 'en');
+          const sc   = computeScore(evts, h.id, a.id);
+          const hs   = sc.home === sc.away ? sc.home + 1 : sc.home;
+          useTournamentMatchStore.getState().saveKnockoutResult({
+            matchId: match.def.id, homeTeamId: h.id, awayTeamId: a.id,
+            homeScore: hs, awayScore: sc.away, events: evts, simulatedAt: Date.now(),
+          });
+          simmedAny = true;
+        }
+      }
+      if (!simmedAny) break;
+    }
+  }, [selectedNationId]);
+
+  // ── Launch group LONG SIM overlay ──────────────────────────────────
+  const handleGroupLongSim = useCallback((fixtureId: string) => {
+    const fixture = GROUP_FIXTURES.find((f) => f.id === fixtureId);
+    if (!fixture) return;
+    const home = NATIONS_BY_ID[fixture.homeTeamId];
+    const away = NATIONS_BY_ID[fixture.awayTeamId];
+    if (!home || !away) return;
+    const { html, events, score } = buildSimConfig(home, away);
+    setSimOverlay({
+      key: `sim-grp-${fixtureId}-${Date.now()}`,
+      homeTeamId: home.id, awayTeamId: away.id,
+      html, fixtureId, simScore: score, simEvents: events,
+      contextLabel: `GROUP ${fixture.group} · MATCHDAY ${fixture.matchday}`,
+      teamsLabel: `${home.code3} vs ${away.code3}`,
+    });
+  }, []);
+
+  // ── Launch group PENALTIES overlay ─────────────────────────────────
+  const handleGroupPenalties = useCallback((fixtureId: string) => {
+    const fixture = GROUP_FIXTURES.find((f) => f.id === fixtureId);
+    if (!fixture) return;
+    const userIsHome = fixture.homeTeamId === selectedNationId;
+    setPenOverlay({
+      key: `pen-grp-${fixtureId}-${Date.now()}`,
+      homeTeamId: fixture.homeTeamId, awayTeamId: fixture.awayTeamId,
+      mode: 'best_of_5', fixtureId,
+      userTeam: userIsHome ? 'home' : 'away',
+    });
+  }, [selectedNationId]);
+
+  // ── Reset a single group match result ────────────────────────────
+  const handleResetGroupMatch = useCallback((fixtureId: string) => {
+    const fixture = GROUP_FIXTURES.find((f) => f.id === fixtureId);
+    if (!fixture) return;
+    const group = fixture.group;
+    // Collect all other results in this group (excluding the one being reset)
+    const currentResults = useTournamentMatchStore.getState().results;
+    const groupFixtures = GROUP_FIXTURES.filter((f) => f.group === group);
+    const otherResults = groupFixtures
+      .filter((f) => f.id !== fixtureId && currentResults[f.id])
+      .map((f) => currentResults[f.id]);
+    // Clear all group results (resets standings too)
+    useTournamentMatchStore.getState().clearGroupResults(group);
+    // Re-save the remaining results (recalculates standings each time)
+    for (const r of otherResults) {
+      useTournamentMatchStore.getState().saveResult(r);
+    }
+  }, []);
+
+  // ── Launch knockout LONG SIM overlay ───────────────────────────────
+  const handleKnockoutLongSim = useCallback(() => {
+    if (!userNextMatch) return;
+    const { def, homeTeamId, awayTeamId } = userNextMatch;
+    if (!homeTeamId || !awayTeamId) return;
+    const home = NATIONS_BY_ID[homeTeamId];
+    const away = NATIONS_BY_ID[awayTeamId];
+    if (!home || !away) return;
+    const { html, events, score } = buildSimConfig(home, away);
+    setSimOverlay({
+      key: `sim-ko-${def.id}-${Date.now()}`,
+      homeTeamId: home.id, awayTeamId: away.id,
+      html, matchId: def.id, simScore: score, simEvents: events,
+      contextLabel: `KNOCKOUT · ${ROUND_LABELS[def.round] ?? def.round}`,
+      teamsLabel: `${home.code3} vs ${away.code3}`,
+    });
+  }, [userNextMatch]);
+
+  // ── Launch knockout PENALTIES overlay ──────────────────────────────
+  const handleKnockoutPenalties = useCallback(() => {
+    if (!userNextMatch) return;
+    const { def, homeTeamId, awayTeamId } = userNextMatch;
+    if (!homeTeamId || !awayTeamId) return;
+    const userIsHome = homeTeamId === selectedNationId;
+    setPenOverlay({
+      key: `pen-ko-${def.id}-${Date.now()}`,
+      homeTeamId, awayTeamId,
+      mode: 'sudden_death', matchId: def.id,
+      userTeam: userIsHome ? 'home' : 'away',
+    });
+  }, [userNextMatch, selectedNationId]);
+
+  // ── Handle sim overlay result ──────────────────────────────────────
+  const handleSimMessage = useCallback((event: WebViewMessageEvent) => {
+    try {
+      const msg = JSON.parse(event.nativeEvent.data);
+      if (msg.type !== 'MATCH_RESULT') return;
+      const ov = simOverlay;
+      if (!ov) return;
+
+      if (ov.fixtureId && !ov.matchId) {
+        // Group stage sim — save result and auto-sim remaining
+        useTournamentMatchStore.getState().saveResult({
+          fixtureId: ov.fixtureId, homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
+          homeScore: ov.simScore.home, awayScore: ov.simScore.away,
+          events: ov.simEvents, simulatedAt: Date.now(),
+        });
+        // Auto-sim remaining group fixtures
+        const freshResults = useTournamentMatchStore.getState().results;
+        const userFixtureIds = new Set(userGroupFixtures.map((f) => f.id));
+        const remaining = GROUP_FIXTURES.filter(
+          (f) => !(f.id in freshResults) && !userFixtureIds.has(f.id),
+        );
+        for (const f of remaining) {
+          const h = NATIONS_BY_ID[f.homeTeamId];
+          const a = NATIONS_BY_ID[f.awayTeamId];
+          if (!h || !a) continue;
+          const evts = simulateMatch(h, a, 'en');
+          const sc   = computeScore(evts, h.id, a.id);
+          useTournamentMatchStore.getState().saveResult({
+            fixtureId: f.id, homeTeamId: h.id, awayTeamId: a.id,
+            homeScore: sc.home, awayScore: sc.away, events: evts, simulatedAt: Date.now(),
+          });
+        }
+        setSimOverlay(null);
+      } else if (ov.matchId != null) {
+        // Knockout sim — check for draw → trigger penalty
+        const hs = ov.simScore.home;
+        const as_ = ov.simScore.away;
+        if (hs === as_) {
+          // Draw in knockout → close sim, launch penalty sudden_death
+          setSimOverlay(null);
+          setPenOverlay({
+            key: `pen-ko-draw-${ov.matchId}-${Date.now()}`,
+            homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
+            mode: 'sudden_death', matchId: ov.matchId,
+            userTeam: ov.homeTeamId === selectedNationId ? 'home' : 'away',
+          });
+        } else {
+          // Clear winner — save directly
+          useTournamentMatchStore.getState().saveKnockoutResult({
+            matchId: ov.matchId, homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
+            homeScore: hs, awayScore: as_, events: ov.simEvents, simulatedAt: Date.now(),
+          });
+          autoSimKnockout();
+          setSimOverlay(null);
+        }
+      }
+    } catch (_) {}
+  }, [simOverlay, userGroupFixtures, autoSimKnockout]);
+
+  // ── Handle penalty overlay result ──────────────────────────────────
+  const handlePenMessage = useCallback((event: WebViewMessageEvent) => {
+    try {
+      const msg = JSON.parse(event.nativeEvent.data);
+      if (msg.type === 'back') { setPenOverlay(null); return; }
+      if (msg.type === 'restart') {
+        // Re-launch with new key
+        if (penOverlay) setPenOverlay({ ...penOverlay, key: `${penOverlay.key}-r${Date.now()}` });
+        return;
+      }
+      if (msg.type !== 'result') return;
+      const ov = penOverlay;
+      if (!ov) return;
+
+      if (ov.fixtureId && !ov.matchId) {
+        // Group stage penalty — use penalty score as the match score
+        useTournamentMatchStore.getState().saveResult({
+          fixtureId: ov.fixtureId, homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
+          homeScore: msg.homeScore, awayScore: msg.awayScore,
+          events: [], simulatedAt: Date.now(),
+        });
+        // Auto-sim remaining group fixtures
+        const freshResults = useTournamentMatchStore.getState().results;
+        const userFixtureIds = new Set(userGroupFixtures.map((f) => f.id));
+        const remaining = GROUP_FIXTURES.filter(
+          (f) => !(f.id in freshResults) && !userFixtureIds.has(f.id),
+        );
+        for (const f of remaining) {
+          const h = NATIONS_BY_ID[f.homeTeamId];
+          const a = NATIONS_BY_ID[f.awayTeamId];
+          if (!h || !a) continue;
+          const evts = simulateMatch(h, a, 'en');
+          const sc   = computeScore(evts, h.id, a.id);
+          useTournamentMatchStore.getState().saveResult({
+            fixtureId: f.id, homeTeamId: h.id, awayTeamId: a.id,
+            homeScore: sc.home, awayScore: sc.away, events: evts, simulatedAt: Date.now(),
+          });
+        }
+        setPenOverlay(null);
+      } else if (ov.matchId != null) {
+        // Knockout penalty
+        useTournamentMatchStore.getState().saveKnockoutResult({
+          matchId: ov.matchId, homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
+          homeScore: msg.homeScore, awayScore: msg.awayScore,
+          events: [], simulatedAt: Date.now(),
+        });
+        autoSimKnockout();
+        setPenOverlay(null);
+      }
+    } catch (_) {}
+  }, [penOverlay, userGroupFixtures, autoSimKnockout]);
 
   // ═════════════════════════════════════════════════════════════════════════
   // PHASE 1 — IDLE (no tournament active)
@@ -791,6 +1089,10 @@ export default function TournamentScreen({ navigation }: Props) {
             const result     = results[fixture.id] ?? null;
             const isUserHome = fixture.homeTeamId === selectedNationId;
             const isAnimating = justSimmedGroupId === fixture.id;
+            // Enforce matchday order: MD2 locked until MD1 played, MD3 locked until MD2 played
+            const md1Done = userGroupFixtures.filter((f) => f.matchday === 1 && f.id in results).length === 1;
+            const md2Done = userGroupFixtures.filter((f) => f.matchday === 2 && f.id in results).length === 1;
+            const isLocked = (fixture.matchday === 2 && !md1Done) || (fixture.matchday === 3 && !md2Done);
 
             return (
               <GroupMatchCard
@@ -803,7 +1105,11 @@ export default function TournamentScreen({ navigation }: Props) {
                 isAnimating={isAnimating}
                 selectedNationId={selectedNationId!}
                 onQuickSim={() => handleSimulateGroupAnimated(fixture.id)}
-                onLongSim={() => handleLongSim(fixture.homeTeamId, fixture.awayTeamId, fixture.id)}
+                onLongSim={() => handleGroupLongSim(fixture.id)}
+                onPenalties={() => handleGroupPenalties(fixture.id)}
+                onReset={() => handleResetGroupMatch(fixture.id)}
+                showReset={false}
+                locked={isLocked}
               />
             );
           })}
@@ -843,6 +1149,7 @@ export default function TournamentScreen({ navigation }: Props) {
             </TouchableOpacity>
           )}
         </ScrollView>
+        {renderOverlays()}
       </SafeAreaView>
     );
   }
@@ -922,11 +1229,7 @@ export default function TournamentScreen({ navigation }: Props) {
                 <View style={styles.koBtns}>
                   <TouchableOpacity
                     style={styles.longSimBtn}
-                    onPress={() => handleLongSim(
-                      nextMatch.homeTeamId ?? '',
-                      nextMatch.awayTeamId ?? '',
-                      `ko-${nextMatch.def.id}`,
-                    )}
+                    onPress={handleKnockoutLongSim}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.longSimBtnText}>▶ LONG SIM</Text>
@@ -940,7 +1243,7 @@ export default function TournamentScreen({ navigation }: Props) {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.koPenBtn}
-                    onPress={handlePlayPenalties}
+                    onPress={handleKnockoutPenalties}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.koPenBtnText}>🥅 PENALTIES</Text>
@@ -985,8 +1288,68 @@ export default function TournamentScreen({ navigation }: Props) {
             </View>
           )}
         </ScrollView>
+        {renderOverlays()}
       </SafeAreaView>
     );
+  }
+
+  // ── Overlay rendering helper ──────────────────────────────────────
+  function renderOverlays() {
+    if (simOverlay) {
+      return (
+        <View style={styles.overlayFull}>
+          <View style={styles.overlayHeader}>
+            <Text style={styles.overlayHeaderContext}>{simOverlay.contextLabel ?? ''}</Text>
+            <Text style={styles.overlayHeaderTeams}>{simOverlay.teamsLabel ?? ''}</Text>
+            <TouchableOpacity onPress={() => setSimOverlay(null)} style={styles.overlayHeaderClose} activeOpacity={0.7}>
+              <Text style={styles.overlayCloseBtnText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <WebView
+            key={simOverlay.key}
+            source={{ html: simOverlay.html }}
+            style={styles.overlayWebView}
+            javaScriptEnabled
+            originWhitelist={['*']}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            scrollEnabled={false}
+            bounces={false}
+            overScrollMode="never"
+            onMessage={handleSimMessage}
+          />
+        </View>
+      );
+    }
+    if (penOverlay) {
+      const home = NATIONS_BY_ID[penOverlay.homeTeamId];
+      const away = NATIONS_BY_ID[penOverlay.awayTeamId];
+      const configScript = home && away
+        ? buildPenaltyConfig(home, away, penOverlay.mode, penOverlay.userTeam)
+        : 'true;';
+      return (
+        <View style={styles.overlayFull}>
+          <WebView
+            key={penOverlay.key}
+            source={{ html: PENALTY_GAME_HTML }}
+            style={styles.overlayWebView}
+            javaScriptEnabled
+            originWhitelist={['*']}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            injectedJavaScriptBeforeContentLoaded={configScript}
+            scrollEnabled={false}
+            bounces={false}
+            overScrollMode="never"
+            onMessage={handlePenMessage}
+          />
+          <TouchableOpacity style={styles.overlayCloseBtn} onPress={() => setPenOverlay(null)} activeOpacity={0.7}>
+            <Text style={styles.overlayCloseBtnText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return null;
   }
 
   // Fallback (shouldn't reach here)
@@ -1372,11 +1735,35 @@ const styles = StyleSheet.create({
     color: COLORS.accentTeal,
   },
 
-  matchResultBadge: { paddingBottom: SPACING.xs, alignItems: 'center' },
+  matchResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.sm,
+    paddingBottom: SPACING.xs,
+  },
   matchResultText: {
     fontFamily: FONTS.bodyBold,
     fontSize: 13,
     letterSpacing: 1,
+  },
+  resetMatchText: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  matchLockedRow: {
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.bgSurface,
+  },
+  matchLockedText: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.textMuted,
   },
 
   qualBanner: {
@@ -1721,5 +2108,60 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 11,
     color: COLORS.textMuted,
+  },
+
+  // ── OVERLAYS ──
+  overlayFull: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 100,
+    backgroundColor: '#000',
+  },
+  overlayWebView: {
+    flex: 1,
+  },
+  overlayHeader: {
+    height: 44,
+    backgroundColor: COLORS.bgPrimary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  overlayHeaderContext: {
+    fontFamily: FONTS.pixel,
+    fontSize: 10,
+    color: COLORS.accent,
+    letterSpacing: 1,
+    flex: 1,
+  },
+  overlayHeaderTeams: {
+    fontFamily: FONTS.heading,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    flex: 1,
+  },
+  overlayHeaderClose: {
+    flex: 1,
+    alignItems: 'flex-end',
+    paddingRight: 4,
+  },
+  overlayCloseBtn: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    zIndex: 101,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overlayCloseBtnText: {
+    fontFamily: FONTS.bodyBold,
+    fontSize: 16,
+    color: '#ffffff',
   },
 });

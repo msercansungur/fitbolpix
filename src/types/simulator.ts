@@ -21,6 +21,7 @@ export interface Team {
   penalty_skill?: number;    // 0–100: higher = slower accuracy ring = easier timing
   goalkeeper_rating?: number; // 0–100: higher = better penalty saves
   formation?: string;         // e.g. '4-3-3', '4-4-2', '3-5-2', '4-2-3-1'
+  altKitColor?: number;       // alternative/away kit hex color for clash resolution
 }
 
 export interface MatchEvent {
