@@ -138,17 +138,17 @@ var SY = GRASS_H / 640;
 function f2c(px, py) { return [px * SX, GRASS_Y + py * SY]; }
 
 // ── Pitch geometry constants ──────────────────────────────────────────────────
-var paW  = Math.floor(PW * 0.62);
-var paH  = Math.floor(PH * 0.19);
-var paX  = PX + (PW - paW) / 2;
-var gaW  = Math.floor(PW * 0.36);
-var gaH  = Math.floor(PH * 0.07);
-var gaX  = PX + (PW - gaW) / 2;
-var goalW = gaW * 0.54;
-var goalD = Math.max(12, Math.floor(PH * 0.025));
-var goalX = W/2 - goalW/2;
-var penSpotY = PH * 0.105;  // pen spot distance from boundary
-var circleR  = Math.min(44, PH * 0.085);
+var paW  = PW * 0.50;                          // penalty area width
+var paH  = PH * 0.16;                          // penalty area height (from goal line inward)
+var paX  = PX + PW * 0.25;                     // penalty area left edge
+var gaW  = PW * 0.28;                          // goal area (6-yard box) width
+var gaH  = PH * 0.06;                          // goal area height
+var gaX  = PX + PW * 0.36;                     // goal area left edge
+var penSpotY = PH * 0.11;                      // penalty spot distance from goal line
+var dArcR    = PH * 0.1;                       // D-arc radius
+var circleR  = Math.min(44, PH * 0.085);       // centre circle radius
+var goalPostW = PW * 0.12;                     // goalpost width
+var goalPostX = PX + PW/2 - goalPostW/2;       // goalpost left edge
 
 // ── Possession (derived from strength ratio) ─────────────────────────────────
 var totalStr = (cfg.homeStrength || 1600) + (cfg.awayStrength || 1600);
@@ -196,65 +196,92 @@ function drawPitch() {
     ctx.fillRect(si * SW, GRASS_Y, SW, GRASS_H);
   }
 
-  // Goals (behind white lines)
-  ctx.fillStyle = 'rgba(50,50,50,0.85)';
-  ctx.fillRect(goalX, PY,            goalW, goalD);
-  ctx.fillRect(goalX, PY+PH-goalD,   goalW, goalD);
-  ctx.strokeStyle = 'rgba(210,210,210,0.92)'; ctx.lineWidth = 1.5;
-  ctx.strokeRect(goalX, PY,          goalW, goalD);
-  ctx.strokeRect(goalX, PY+PH-goalD, goalW, goalD);
+  // Goalposts — extend OUTSIDE the pitch boundary
+  // Net fill behind goalposts
+  ctx.fillStyle = 'rgba(50,50,50,0.7)';
+  ctx.fillRect(goalPostX, PY - 8, goalPostW, 8);        // top net area
+  ctx.fillRect(goalPostX, PY + PH, goalPostW, 8);       // bottom net area
   // Net crosshatch
   ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 0.5;
   for (var nc = 1; nc < 6; nc++) {
-    var nx = goalX + nc * goalW / 6;
-    ctx.beginPath(); ctx.moveTo(nx, PY);          ctx.lineTo(nx, PY+goalD);      ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(nx, PY+PH-goalD); ctx.lineTo(nx, PY+PH);        ctx.stroke();
+    var nx = goalPostX + nc * goalPostW / 6;
+    ctx.beginPath(); ctx.moveTo(nx, PY-8);   ctx.lineTo(nx, PY);      ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(nx, PY+PH);  ctx.lineTo(nx, PY+PH+8); ctx.stroke();
   }
   for (var nr = 1; nr < 3; nr++) {
-    ctx.beginPath(); ctx.moveTo(goalX, PY+nr*goalD/3);          ctx.lineTo(goalX+goalW, PY+nr*goalD/3);          ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(goalX, PY+PH-goalD+nr*goalD/3); ctx.lineTo(goalX+goalW, PY+PH-goalD+nr*goalD/3); ctx.stroke();
+    var nyt = PY - 8 + nr * 8/3;
+    var nyb = PY + PH + nr * 8/3;
+    ctx.beginPath(); ctx.moveTo(goalPostX, nyt); ctx.lineTo(goalPostX+goalPostW, nyt); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(goalPostX, nyb); ctx.lineTo(goalPostX+goalPostW, nyb); ctx.stroke();
   }
+  // Goalpost outlines
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+  ctx.strokeRect(goalPostX, PY - 8, goalPostW, 8);      // top goalpost
+  ctx.strokeRect(goalPostX, PY + PH, goalPostW, 8);     // bottom goalpost
 
   // White pitch markings
   ctx.save();
   ctx.strokeStyle = 'rgba(255,255,255,0.82)'; ctx.lineWidth = 1.5;
+  // Boundary
   ctx.strokeRect(PX, PY, PW, PH);
+  // Halfway line
   ctx.beginPath(); ctx.moveTo(PX, MIDPY); ctx.lineTo(PX+PW, MIDPY); ctx.stroke();
+  // Centre circle
   ctx.beginPath(); ctx.arc(W/2, MIDPY, circleR, 0, Math.PI*2); ctx.stroke();
-  ctx.strokeRect(paX, PY,        paW, paH);
-  ctx.strokeRect(paX, PY+PH-paH, paW, paH);
-  ctx.strokeRect(gaX, PY,        gaW, gaH);
-  ctx.strokeRect(gaX, PY+PH-gaH, gaW, gaH);
-  // Penalty arcs
-  ctx.beginPath(); ctx.arc(W/2, PY+penSpotY,      circleR, Math.PI*0.28,  Math.PI*0.72,  false); ctx.stroke();
-  ctx.beginPath(); ctx.arc(W/2, PY+PH-penSpotY,   circleR, Math.PI*1.28,  Math.PI*1.72,  false); ctx.stroke();
-  // Corner arcs
-  ctx.beginPath(); ctx.arc(PX,    PY,    8, 0,          Math.PI/2,  false); ctx.stroke();
-  ctx.beginPath(); ctx.arc(PX+PW, PY,    8, Math.PI/2,  Math.PI,    false); ctx.stroke();
-  ctx.beginPath(); ctx.arc(PX,    PY+PH, 8, -Math.PI/2, 0,          false); ctx.stroke();
-  ctx.beginPath(); ctx.arc(PX+PW, PY+PH, 8, Math.PI,   -Math.PI/2, false); ctx.stroke();
+  // Penalty areas (anchored to goal line, extending inward)
+  ctx.strokeRect(paX, PY,        paW, paH);             // top PA
+  ctx.strokeRect(paX, PY+PH-paH, paW, paH);             // bottom PA
+  // Goal areas (6-yard box, anchored to goal line, inside PA)
+  ctx.strokeRect(gaX, PY,        gaW, gaH);             // top GA
+  ctx.strokeRect(gaX, PY+PH-gaH, gaW, gaH);             // bottom GA
+  // D-arcs (only the portion OUTSIDE the penalty area)
+  // Top D: arc bulges downward (outside PA bottom edge at PY+paH)
+  ctx.beginPath(); ctx.arc(W/2, PY+penSpotY,    dArcR, Math.PI*0.35, Math.PI*0.65, false); ctx.stroke();
+  // Bottom D: arc bulges upward (outside PA top edge at PY+PH-paH)
+  ctx.beginPath(); ctx.arc(W/2, PY+PH-penSpotY, dArcR, Math.PI*1.35, Math.PI*1.65, false); ctx.stroke();
+  // Corner arcs (quarter circles at each corner)
+  ctx.beginPath(); ctx.arc(PX,    PY,    8, 0,             Math.PI/2,    false); ctx.stroke();  // top-left
+  ctx.beginPath(); ctx.arc(PX+PW, PY,    8, Math.PI/2,     Math.PI,      false); ctx.stroke();  // top-right
+  ctx.beginPath(); ctx.arc(PX+PW, PY+PH, 8, Math.PI,       Math.PI*1.5,  false); ctx.stroke();  // bottom-right
+  ctx.beginPath(); ctx.arc(PX,    PY+PH, 8, Math.PI*1.5,   Math.PI*2,    false); ctx.stroke();  // bottom-left
   // Dots
   ctx.fillStyle = 'rgba(255,255,255,0.82)';
-  ctx.beginPath(); ctx.arc(W/2, MIDPY,           2.5, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(W/2, PY+penSpotY,     2.5, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(W/2, PY+PH-penSpotY,  2.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W/2, MIDPY,           2.5, 0, Math.PI*2); ctx.fill();  // centre spot
+  ctx.beginPath(); ctx.arc(W/2, PY+penSpotY,     2.5, 0, Math.PI*2); ctx.fill();  // top pen spot
+  ctx.beginPath(); ctx.arc(W/2, PY+PH-penSpotY,  2.5, 0, Math.PI*2); ctx.fill();  // bottom pen spot
   ctx.restore();
 
   // Ad boards — top (just below score bar) and bottom (just above possession bar)
   var ADS = ['FITBOLPIX', 'WC 2026', '\u26bd', 'FITBOLPIX', 'WC 2026', '\u26bd'];
   var adY1 = SCORE_H, adY2 = GRASS_B;
-  ctx.fillStyle = '#0a1f0a';
-  ctx.fillRect(0, adY1, W, AD_H);
-  ctx.fillRect(0, adY2, W, AD_H);
-  ctx.strokeStyle = '#1a3a1a'; ctx.lineWidth = 0.5;
-  ctx.strokeRect(0, adY1, W, AD_H);
-  ctx.strokeRect(0, adY2, W, AD_H);
-  ctx.fillStyle = 'rgba(200,255,200,0.50)';
-  ctx.font = 'bold 7px Courier New'; ctx.textAlign = 'center';
   var asp = W / ADS.length;
-  for (var ai = 0; ai < ADS.length; ai++) {
-    ctx.fillText(ADS[ai], asp*ai + asp/2, adY1 + 13);
-    ctx.fillText(ADS[ai], asp*ai + asp/2, adY2 + 13);
+  // Draw both ad strips
+  var adYs = [adY1, adY2];
+  for (var si = 0; si < 2; si++) {
+    var ay = adYs[si];
+    // Base fill
+    ctx.fillStyle = '#0a1f0a';
+    ctx.fillRect(0, ay, W, AD_H);
+    // Alternating panel backgrounds + separators
+    for (var ai = 0; ai < ADS.length; ai++) {
+      ctx.fillStyle = ai % 2 === 0 ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)';
+      ctx.fillRect(ai * asp, ay, asp, AD_H);
+      // Vertical separator between panels
+      if (ai > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(ai * asp, ay, 1, AD_H);
+      }
+    }
+    // Horizontal borders top and bottom
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(0, ay, W, 1);
+    ctx.fillRect(0, ay + AD_H - 1, W, 1);
+    // Text labels
+    ctx.fillStyle = 'rgba(200,255,200,0.50)';
+    ctx.font = 'bold 7px "Courier New", monospace'; ctx.textAlign = 'center';
+    for (var aj = 0; aj < ADS.length; aj++) {
+      ctx.fillText(ADS[aj], aj * asp + asp/2, ay + 13);
+    }
   }
 }
 
@@ -295,7 +322,7 @@ function processEvt(evt) {
   if (evt.type === 'goal') {
     if (isHome) homeScore++; else awayScore++;
     btx = W/2 + (rng()-0.5)*20;
-    bty = isHome ? (PY + goalD * 0.6) : (PY + PH - goalD * 0.6);
+    bty = isHome ? (PY - 4) : (PY + PH + 4);
     var att = isHome ? homeP : awayP;
     att.forEach(function(p, i) {
       if (i > 0) { p.tx = W/2 + (rng()-0.5)*80; p.ty = isHome ? PY+50 : PY+PH-50; }
@@ -506,35 +533,35 @@ function drawScoreBar() {
 
   // Home code
   ctx.fillStyle = '#FACE43';
-  ctx.font = 'bold 16px Courier New';
+  ctx.font = 'bold 14px "Courier New", monospace';
   ctx.textAlign = 'left';
   ctx.fillText(cfg.homeCode, 10, 22);
   // Home name
   ctx.fillStyle = '#aaa';
-  ctx.font = '9px Courier New';
+  ctx.font = '10px "Courier New", monospace';
   ctx.fillText((cfg.homeName || '').substring(0, 13), 10, 34);
   // Home formation
   ctx.fillStyle = '#556';
-  ctx.font = '8px Courier New';
+  ctx.font = '10px "Courier New", monospace';
   ctx.fillText(cfg.homeFormation || '', 10, 45);
 
   // Away code
   ctx.fillStyle = '#FACE43';
-  ctx.font = 'bold 16px Courier New';
+  ctx.font = 'bold 14px "Courier New", monospace';
   ctx.textAlign = 'right';
   ctx.fillText(cfg.awayCode, W-10, 22);
   // Away name
   ctx.fillStyle = '#aaa';
-  ctx.font = '9px Courier New';
+  ctx.font = '10px "Courier New", monospace';
   ctx.fillText((cfg.awayName || '').substring(0, 13), W-10, 34);
   // Away formation
   ctx.fillStyle = '#556';
-  ctx.font = '8px Courier New';
+  ctx.font = '10px "Courier New", monospace';
   ctx.fillText(cfg.awayFormation || '', W-10, 45);
 
   // Score — center, large, #FACE43
   ctx.fillStyle = '#FACE43';
-  ctx.font = 'bold 26px Courier New';
+  ctx.font = 'bold 28px "Courier New", monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(homeScore + '  -  ' + awayScore, W/2, SCORE_H/2 - 4);
@@ -544,7 +571,7 @@ function drawScoreBar() {
   var ms = (phase==='playing'||phase==='halftime') ? (currentMinute + "'")
          : (phase==='fulltime'||phase==='kickoff')  ? 'FT' : '--';
   ctx.fillStyle = '#778';
-  ctx.font = '9px Courier New';
+  ctx.font = '11px "Courier New", monospace';
   ctx.textAlign = 'center';
   ctx.fillText(ms, W/2, SCORE_H - 5);
 }
@@ -558,8 +585,8 @@ function drawPossessionBar() {
   ctx.fillStyle = '#1a3a3a';
   ctx.fillRect(0, Y, W, 1); // top border
 
-  // Split colored bar (10px tall, centered vertically in zone)
-  var barH = 8, barY = Y + (POSS_H - barH) / 2;
+  // Split colored bar — top portion of the zone
+  var barH = 8, barY = Y + 7;
   var homeBarW = Math.floor(W * homePoss / 100);
   ctx.fillStyle = n2rgb(cfg.homeColor);
   ctx.fillRect(0, barY, homeBarW, barH);
@@ -569,15 +596,16 @@ function drawPossessionBar() {
   ctx.fillStyle = '#00292A';
   ctx.fillRect(homeBarW - 1, barY - 1, 2, barH + 2);
 
-  // Labels
-  ctx.fillStyle = '#aaa'; ctx.font = '9px Courier New';
+  // Labels — all at same y, below the bar
+  var textY = Y + 24;
+  ctx.font = '9px "Courier New", monospace';
+  ctx.fillStyle = '#94B0C0';
   ctx.textAlign = 'left';
-  ctx.fillText(cfg.homeCode + ' ' + homePoss + '%', 8, Y + POSS_H - 8);
-  ctx.textAlign = 'right';
-  ctx.fillText(awayPoss + '% ' + cfg.awayCode, W-8, Y + POSS_H - 8);
+  ctx.fillText(cfg.homeCode + ' ' + homePoss + '%', 8, textY);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#667';
-  ctx.fillText('POSSESSION', W/2, Y + POSS_H - 8);
+  ctx.fillText('POSSESSION', W/2, textY);
+  ctx.textAlign = 'right';
+  ctx.fillText(awayPoss + '% ' + cfg.awayCode, W-8, textY);
 }
 
 // ── Event overlay ─────────────────────────────────────────────────────────────
