@@ -180,7 +180,7 @@ export default function HomeScreen() {
         {/* ── Header ───────────────────────────────────────────── */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <FitbolpixLogo size="medium" />
+            <FitbolpixLogo size="large" />
             <Text style={styles.headerSub}>World Football Championship 2026</Text>
             <Text style={styles.headerSub}>Track · Simulate · Play · Collect</Text>
           </View>
@@ -412,11 +412,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginTop: SPACING[4],
     marginBottom: SPACING[16],
+    position: 'relative',
   },
   headerLeft: {
+    alignItems: 'center',
     gap: SPACING[4],
   },
   headerSub: {
@@ -428,6 +430,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   gearBtn: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
     width: 34,
     height: 34,
     backgroundColor: COLORS.surface,
@@ -514,12 +519,13 @@ const styles = StyleSheet.create({
   },
   digitsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
   colon: {
     gap: 3,
-    paddingBottom: 18,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   colonDot: {
     width: 3,

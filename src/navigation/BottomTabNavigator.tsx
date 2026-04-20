@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Animated } from 'react-native';
+import { Animated, View } from 'react-native';
 import { createBottomTabNavigator, BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { TouchableOpacity } from 'react-native';
 import HomeScreen              from '../screens/HomeScreen';
@@ -32,27 +32,51 @@ const Tab = createBottomTabNavigator<BottomTabParamList>();
 // ─── Animated tab button ──────────────────────────────────────────────────────
 function AnimatedTabButton(props: BottomTabBarButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
+  const selected = !!props.accessibilityState?.selected;
 
   // Pulse on focus
   useEffect(() => {
-    if (props.accessibilityState?.selected) {
+    if (selected) {
       Animated.sequence([
         Animated.timing(scale, { toValue: 1.18, duration: 90,  useNativeDriver: true }),
         Animated.timing(scale, { toValue: 1.00, duration: 120, useNativeDriver: true }),
       ]).start();
     }
-  }, [props.accessibilityState?.selected]);
+  }, [selected]);
 
   return (
     <TouchableOpacity
       {...(props as any)}
       activeOpacity={0.8}
-      style={[props.style, { flex: 1, alignItems: 'center', justifyContent: 'center' }]}
+      style={[
+        props.style,
+        {
+          flex: 1,
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          justifyContent: 'flex-start',
+          overflow: 'visible',
+        },
+      ]}
       onPress={props.onPress}
     >
-      <Animated.View style={{ transform: [{ scale }] }}>
-        {props.children}
-      </Animated.View>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        {selected && (
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            left: 8,
+            right: 8,
+            height: 3,
+            backgroundColor: '#FACE43',
+            borderBottomLeftRadius: 2,
+            borderBottomRightRadius: 2,
+          }} />
+        )}
+        <Animated.View style={{ transform: [{ scale }] }}>
+          {props.children}
+        </Animated.View>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -72,10 +96,22 @@ export default function BottomTabNavigator() {
         },
         tabBarActiveTintColor:   COLORS.accent,
         tabBarInactiveTintColor: COLORS.textMuted,
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingTop: 4,
+          paddingBottom: 4,
+        },
         tabBarLabelStyle: {
           fontFamily: FONTS.pixel,
           fontSize: 9,
           letterSpacing: 0.5,
+          marginTop: 2,
+          textAlign: 'center',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingTop: 0,
+          paddingBottom: 4,
         },
         tabBarButton: (props) => <AnimatedTabButton {...props} />,
       }}

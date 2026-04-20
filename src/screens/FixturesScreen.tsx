@@ -653,12 +653,12 @@ const styles = StyleSheet.create({
   standHeadText: {
     fontFamily: TYPOGRAPHY.fontBody,
     fontSize: 10,
-    color: COLORS.textMuted,
+    color: COLORS.textPrimary,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   standHeadPts: {
-    color: COLORS.textMuted,
+    color: COLORS.textPrimary,
   },
   standRow: {
     flexDirection: 'row',
@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: TYPOGRAPHY.fontBody,
     fontSize: 10,
-    color: COLORS.textMuted,
+    color: COLORS.textPrimary,
   },
   fxGroupBadge: {
     paddingHorizontal: 6,

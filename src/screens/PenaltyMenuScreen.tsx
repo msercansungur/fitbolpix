@@ -419,19 +419,6 @@ export default function PenaltyMenuScreen() {
           <Text style={styles.pageTitle}>PENALTIES</Text>
           <Text style={styles.pageSubtitle}>Choose your format</Text>
 
-          {/* Intro strip */}
-          <View style={styles.introStrip}>
-            <View style={styles.introIconTile}>
-              <PixelGlyph kind="goalpost" color={COLORS.gold} px={3} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.introHeading}>CHOOSE YOUR SHOWDOWN</Text>
-              <Text style={styles.introSub}>
-                Best of 5, Sudden Death, or historic reruns
-              </Text>
-            </View>
-          </View>
-
           {/* Mode cards */}
           <View style={styles.modeList}>
             <ModeCard

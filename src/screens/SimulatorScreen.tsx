@@ -754,7 +754,7 @@ export default function SimulatorScreen({ route }: Props) {
       <View style={styles.topToggleInner}>
         {(['match', 'tournament'] as SimMode[]).map((m) => {
           const active = simMode === m;
-          const label  = m === 'match' ? '⚽  HEAD TO HEAD' : '🏆  TOURNAMENT SIM';
+          const label  = m === 'match' ? 'HEAD TO HEAD' : 'TOURNAMENT SIM';
           return (
             <TouchableOpacity
               key={m}
@@ -1426,7 +1426,7 @@ const styles = StyleSheet.create({
   slotHint: {
     fontFamily: TYPOGRAPHY.fontBody,
     fontSize: 9,
-    color: COLORS.textMuted,
+    color: COLORS.textPrimary,
     letterSpacing: 1,
     marginTop: 4,
   },
@@ -1904,7 +1904,7 @@ const styles = StyleSheet.create({
   standHeadText: {
     fontFamily: TYPOGRAPHY.fontBody,
     fontSize: 10,
-    color: COLORS.textMuted,
+    color: COLORS.textPrimary,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
@@ -2103,7 +2103,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: TYPOGRAPHY.fontBody,
     fontSize: 10,
-    color: COLORS.textMuted,
+    color: COLORS.textPrimary,
   },
   tfxGroupBadge: {
     paddingHorizontal: 6,
