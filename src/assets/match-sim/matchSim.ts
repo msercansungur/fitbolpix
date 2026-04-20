@@ -35,17 +35,17 @@ ${configScript}
 html,body{width:100%;height:100%;overflow:hidden;background:#00292A;touch-action:none}
 canvas{display:block;position:absolute;top:0;left:0}
 #spd{
-  position:absolute;bottom:38px;right:8px;
-  background:#0e2b0e;color:#00e676;border:1px solid #00e676;
-  font:bold 12px 'Courier New',monospace;
-  padding:5px 12px;border-radius:4px;cursor:pointer;z-index:10;
+  position:absolute;bottom:90px;right:8px;
+  background:#0F2129;color:#FACE43;border:1px solid #FACE43;
+  font:bold 12px monospace;
+  padding:4px 10px;border-radius:4px;cursor:pointer;z-index:10;
   -webkit-tap-highlight-color:transparent;
 }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<button id="spd">1x</button>
+<button id="spd">⚡ SPEED: 1x</button>
 <script>
 (function(){
 'use strict';
@@ -160,7 +160,7 @@ var phase = 'boot';  // boot|kickoff|playing|halftime|fulltime
 var halftimeDone = false;
 var currentMinute = 0, minuteAccum = 0;
 var speed = 1;
-var SPEEDS = [1, 3, 6];
+var SPEEDS = [1, 2, 3, 6];
 var spdIdx = 0;
 var homeScore = 0, awayScore = 0;
 
@@ -184,7 +184,7 @@ var ftSent = false;
 spdBtn.addEventListener('click', function() {
   spdIdx = (spdIdx + 1) % SPEEDS.length;
   speed  = SPEEDS[spdIdx];
-  spdBtn.textContent = SPEEDS[spdIdx] + 'x';
+  spdBtn.textContent = '⚡ SPEED: ' + SPEEDS[spdIdx] + 'x';
 });
 
 // ── Pitch drawing ─────────────────────────────────────────────────────────────
