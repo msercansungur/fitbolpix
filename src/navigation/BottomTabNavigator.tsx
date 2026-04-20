@@ -22,7 +22,7 @@ export type BottomTabParamList = {
   Home:       undefined;
   Fixtures:   undefined;
   Simulator:  { homeTeamId: string; awayTeamId: string; fixtureId?: string } | undefined;
-  Penalty:    { homeTeamId?: string; awayTeamId?: string; mode?: string; fixtureId?: string } | undefined;
+  Penalty: { homeTeamId?: string; awayTeamId?: string; mode?: string; fixtureId?: string; result?: { homeTeamId: string; awayTeamId: string; mode: 'best_of_5' | 'sudden_death'; homeScore: number; awayScore: number; winnerId: string | null; kicks: Array<{ teamId: string; outcome: 'goal' | 'saved' | 'miss' }>; rounds: number; } } | undefined;
   Tournament: undefined;
   Collection: undefined;
 };
