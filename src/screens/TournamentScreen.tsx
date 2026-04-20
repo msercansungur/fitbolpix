@@ -10,12 +10,15 @@ import {
   Dimensions,
   Alert,
   Share,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import WebView, { WebViewMessageEvent } from 'react-native-webview';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
-import { COLORS, SPACING, FONTS, RADIUS } from '../constants/theme';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, PIXEL_SHADOW } from '../theme';
+import { cardGreen, cardTeal, cardRed, cardGold } from '../theme/gradients';
 import { NATIONS, NATIONS_BY_ID } from '../constants/nations';
 import { GROUP_FIXTURES } from '../constants/fixtures';
 import { useTournamentMatchStore, selectTournamentStandings } from '../store/useTournamentMatchStore';
@@ -26,6 +29,7 @@ import { TeamStanding } from '../types/matchResult';
 import { KnockoutRound } from '../types/knockout';
 import { Team } from '../types/simulator';
 import PixelFlag from '../components/PixelFlag';
+import KnockoutBracket from '../components/KnockoutBracket';
 import { animateScore } from '../utils/scoreAnimation';
 import { PENALTY_GAME_HTML } from '../assets/penalty-game/penaltyGame';
 import { getMatchSimHTML, MatchSimConfig } from '../assets/match-sim/matchSim';
@@ -81,8 +85,8 @@ type PenaltyOverlay = {
   awayTeamId: string;
   mode: 'best_of_5' | 'sudden_death';
   userTeam: 'home' | 'away';
-  fixtureId?: string;      // group fixture id
-  matchId?: number;         // knockout match id
+  fixtureId?: string;
+  matchId?: number;
 };
 
 type SimOverlay = {
@@ -94,8 +98,8 @@ type SimOverlay = {
   matchId?: number;
   simScore: { home: number; away: number };
   simEvents: import('../types/simulator').MatchEvent[];
-  contextLabel?: string;  // e.g. "GROUP D · MATCHDAY 1"
-  teamsLabel?: string;    // e.g. "AUS vs TUR"
+  contextLabel?: string;
+  teamsLabel?: string;
 };
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -110,137 +114,114 @@ const ROUND_LABELS: Record<string, string> = {
   Final: 'THE FINAL',
 };
 
-// ─── ELO bar (replaces star rating) ──────────────────────────────────────────
-const ELO_MIN = 1400;
+// ─── Champion phrases (per nation) ────────────────────────────────────────────
+const CHAMPION_PHRASES: Record<string, { local: string; en: string }> = {
+  tur: { local: 'Bizim çocuklar kazandı! 🏆',                         en: 'Our boys won it all!' },
+  eng: { local: "Football's coming home! 🏆",                          en: 'England are world champions!' },
+  arg: { local: '¡Muchachos, ahora nos volvimos a ilusionar! 🏆',      en: 'Argentina are world champions!' },
+  bra: { local: 'É campeão! 🏆',                                       en: 'Brazil are world champions!' },
+  spa: { local: '¡Campeones del mundo! 🏆',                            en: 'Spain are world champions!' },
+  fra: { local: 'Ramenez la coupe à la maison! 🏆',                    en: 'France are world champions!' },
+  ger: { local: 'Deutschland ist Weltmeister! 🏆',                     en: 'Germany are world champions!' },
+};
+const GENERIC_PHRASE = { local: 'We are the champions! 🏆', en: 'World Champions of 2026!' };
+
+// ─── ELO bounds (difficulty dot mapping) ──────────────────────────────────────
+const ELO_MIN = 1250;
 const ELO_MAX = 1950;
 
-function EloBar({ strength, label }: { strength: number; label?: boolean }) {
-  const pct = Math.min(1, Math.max(0, (strength - ELO_MIN) / (ELO_MAX - ELO_MIN)));
-  // colour: green → yellow → red by how strong (green = strong)
-  const barColor = pct > 0.7 ? COLORS.success : pct > 0.4 ? COLORS.warning : COLORS.textMuted;
+function strengthToStars(strength: number): number {
+  const clamped = Math.max(ELO_MIN, Math.min(ELO_MAX, strength));
+  return Math.max(1, Math.min(5, Math.round((clamped - ELO_MIN) / 140)));
+}
+
+function DifficultyDots({ strength, dotSize = 4 }: { strength: number; dotSize?: number }) {
+  const n = strengthToStars(strength);
   return (
-    <View style={styles.eloBarWrap}>
-      <View style={[styles.eloBarTrack]}>
-        <View style={[styles.eloBarFill, { width: `${Math.round(pct * 100)}%` as any, backgroundColor: barColor }]} />
-      </View>
-      {label !== false && (
-        <Text style={styles.eloBarLabel}>ELO {strength}</Text>
-      )}
+    <View style={{ flexDirection: 'row', gap: 2 }}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <View
+          key={i}
+          style={{
+            width: dotSize,
+            height: dotSize,
+            backgroundColor: i < n ? COLORS.gold : COLORS.border,
+          }}
+        />
+      ))}
     </View>
   );
 }
 
-// ─── Group match card (stateful score animation) ──────────────────────────────
-function GroupMatchCard({
-  fixture, homeTeam, awayTeam, result, isUserHome, isAnimating,
-  selectedNationId, onQuickSim, onLongSim, onPenalties, onReset,
-  showReset = true, locked = false,
-}: {
-  fixture: typeof GROUP_FIXTURES[number];
-  homeTeam: import('../types/simulator').Team | undefined;
-  awayTeam: import('../types/simulator').Team | undefined;
-  result: import('../types/matchResult').MatchResult | null;
-  isUserHome: boolean;
-  isAnimating: boolean;
-  selectedNationId: string;
-  onQuickSim: () => void;
-  onLongSim: () => void;
-  onPenalties: () => void;
-  onReset: () => void;
-  showReset?: boolean;
-  locked?: boolean;
-}) {
-  const [dispHome, setDispHome] = useState(result?.homeScore ?? 0);
-  const [dispAway, setDispAway] = useState(result?.awayScore ?? 0);
+// ─── Pixel glyph (6×6) ────────────────────────────────────────────────────────
+type GlyphKind = 'trophy' | 'ball' | 'check' | 'cross' | 'star' | 'shield' | 'flag' | 'search' | 'chevLeft' | 'chevRight';
+const GLYPHS: Record<GlyphKind, string[]> = {
+  trophy:    ['111111','011110','011110','001100','011110','111111'],
+  ball:      ['011110','110011','101101','101101','110011','011110'],
+  check:     ['000001','000011','100110','111100','011000','010000'],
+  cross:     ['110011','111110','011100','011100','111110','110011'],
+  star:      ['001100','001100','111111','011110','011110','110011'],
+  shield:    ['111111','110011','100001','101101','110011','011110'],
+  flag:      ['111110','110010','111110','100000','100000','100000'],
+  search:    ['011100','110110','110110','011100','000110','000011'],
+  chevLeft:  ['000001','000011','000110','000110','000011','000001'],
+  chevRight: ['100000','110000','011000','011000','110000','100000'],
+};
 
-  useEffect(() => {
-    if (!result) { setDispHome(0); setDispAway(0); return; }
-    if (isAnimating) {
-      const c1 = animateScore(result.homeScore, setDispHome);
-      const c2 = animateScore(result.awayScore, setDispAway);
-      return () => { c1(); c2(); };
-    } else {
-      setDispHome(result.homeScore);
-      setDispAway(result.awayScore);
-    }
-  }, [result?.homeScore, result?.awayScore, isAnimating]);
-
-  if (!homeTeam || !awayTeam) return null;
-  const userScore = result ? (isUserHome ? result.homeScore : result.awayScore) : 0;
-  const oppScore  = result ? (isUserHome ? result.awayScore : result.homeScore) : 0;
-  const resultLabel = userScore > oppScore ? 'WIN ✓' : userScore < oppScore ? 'LOSS ✗' : 'DRAW';
-  const resultColor = userScore > oppScore ? COLORS.success : userScore < oppScore ? COLORS.danger : COLORS.warning;
-
+function PixelGlyph({ kind, color, px = 2 }: { kind: GlyphKind; color: string; px?: number }) {
   return (
-    <View style={styles.matchCard}>
-      <View style={styles.matchCardHeader}>
-        <Text style={styles.matchMD}>MD{fixture.matchday}</Text>
-        <Text style={styles.matchDate}>{fixture.date}</Text>
-        <Text style={styles.matchVenue} numberOfLines={1}>{fixture.venue}</Text>
-      </View>
-      <View style={styles.matchTeams}>
-        <View style={styles.matchTeamSide}>
-          <PixelFlag isoCode={homeTeam.isoCode} size={24} />
-          <Text style={[styles.matchTeamName, homeTeam.id === selectedNationId && styles.matchTeamNameUser]} numberOfLines={1}>
-            {homeTeam.code3}
-          </Text>
+    <View style={{ width: px * 6, height: px * 6 }}>
+      {GLYPHS[kind].map((row, r) => (
+        <View key={r} style={{ flexDirection: 'row' }}>
+          {row.split('').map((c, ci) => (
+            <View key={ci} style={{ width: px, height: px, backgroundColor: c === '1' ? color : 'transparent' }} />
+          ))}
         </View>
-        <View style={styles.matchScoreBox}>
-          {result ? (
-            <Text style={styles.matchScore}>{dispHome} – {dispAway}</Text>
-          ) : (
-            <Text style={styles.matchVs}>VS</Text>
-          )}
-        </View>
-        <View style={[styles.matchTeamSide, styles.matchTeamRight]}>
-          <Text style={[styles.matchTeamName, awayTeam.id === selectedNationId && styles.matchTeamNameUser]} numberOfLines={1}>
-            {awayTeam.code3}
-          </Text>
-          <PixelFlag isoCode={awayTeam.isoCode} size={24} />
-        </View>
-      </View>
-      {!result && !locked && (
-        <View style={styles.matchBtns}>
-          <TouchableOpacity style={styles.longSimBtn} onPress={onLongSim} activeOpacity={0.8}>
-            <Text style={styles.longSimBtnText}>▶ LONG SIM</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.simBtn} onPress={onQuickSim} activeOpacity={0.8}>
-            <Text style={styles.simBtnText}>⚡ QUICK SIM</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.playBtn} onPress={onPenalties} activeOpacity={0.8}>
-            <Text style={styles.playBtnText}>🥅 PENALTIES</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      {!result && locked && (
-        <View style={styles.matchLockedRow}>
-          <Text style={styles.matchLockedText}>🔒 Play previous matchday first</Text>
-        </View>
-      )}
-      {result && (
-        <View style={styles.matchResultRow}>
-          <Text style={[styles.matchResultText, { color: resultColor }]}>{resultLabel}</Text>
-          {showReset && (
-            <TouchableOpacity onPress={onReset} activeOpacity={0.7}>
-              <Text style={styles.resetMatchText}>↺ RESET</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+      ))}
     </View>
   );
 }
 
-// ─── Confetti component (winner screen) ───────────────────────────────────────
-const CONFETTI_COLORS = ['#ffd700', '#ff4444', '#44ff88', '#4488ff', '#ff88ff', '#ff8800'];
+// ─── Pixel trophy (16×18) ─────────────────────────────────────────────────────
+const PIXEL_TROPHY = [
+  '0011111111111100','0111111111111110','1100111111110011','1100111111110011',
+  '1100111111110011','0110011111100110','0011001111001100','0000011111100000',
+  '0000001111000000','0000001111000000','0000001111000000','0000011111100000',
+  '0000111111110000','0001111111111000','0011111111111100','0111111111111110',
+  '1111111111111111','1111111111111111',
+];
+
+function PixelTrophy({ size = 3 }: { size?: number }) {
+  return (
+    <View style={{ width: size * 16, height: size * 18 }}>
+      {PIXEL_TROPHY.map((row, r) => (
+        <View key={r} style={{ flexDirection: 'row' }}>
+          {row.split('').map((c, ci) => (
+            <View
+              key={ci}
+              style={{
+                width: size,
+                height: size,
+                backgroundColor: c === '1' ? (ci < 3 || ci > 12 ? '#B98F1A' : COLORS.gold) : 'transparent',
+              }}
+            />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─── Confetti (winner screen) ─────────────────────────────────────────────────
+const CONFETTI_COLORS = [COLORS.gold, '#94C952', COLORS.teal, COLORS.red, '#F0F4F7', '#FF88FF'];
 function Confetti() {
   const pieces = useRef(
-    Array.from({ length: 24 }, (_, i) => ({
-      x:     Math.random() * SCREEN_W,               // plain number — never animated
+    Array.from({ length: 28 }, (_, i) => ({
+      x:     Math.random() * SCREEN_W,
       y:     new Animated.Value(-20 - Math.random() * 100),
       color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-      size:  6 + Math.floor(Math.random() * 8),
-      delay: i * 80,
+      size:  5 + Math.floor(Math.random() * 7),
+      delay: i * 70,
     })),
   ).current;
 
@@ -249,7 +230,7 @@ function Confetti() {
       Animated.loop(
         Animated.timing(p.y, {
           toValue: 900,
-          duration: 2000 + Math.random() * 1500,
+          duration: 2200 + Math.random() * 1500,
           delay: p.delay,
           useNativeDriver: true,
         }),
@@ -269,7 +250,6 @@ function Confetti() {
             left: p.x,
             width: p.size,
             height: p.size,
-            borderRadius: 2,
             backgroundColor: p.color,
             transform: [{ translateY: p.y }],
           }}
@@ -279,29 +259,230 @@ function Confetti() {
   );
 }
 
-// ─── Standings table row ──────────────────────────────────────────────────────
-function StandingsRow({ row, pos, isUser }: { row: TeamStanding; pos: number; isUser: boolean }) {
-  const team = NATIONS_BY_ID[row.teamId];
-  const gd   = row.goalsFor - row.goalsAgainst;
+// ─── Reusable top bar (Screens 2,3,4) ─────────────────────────────────────────
+function TopBar({
+  title, subtitle, onBack, right,
+}: {
+  title: string;
+  subtitle?: string;
+  onBack?: () => void;
+  right?: React.ReactNode;
+}) {
   return (
-    <View style={[styles.standRow, isUser && styles.standRowUser]}>
-      <Text style={styles.standPos}>{pos}</Text>
-      <Text style={styles.standFlag}>{team?.flag ?? '🏳️'}</Text>
-      <Text style={[styles.standName, isUser && styles.standNameUser]} numberOfLines={1}>
-        {team?.name ?? row.teamId}
-      </Text>
-      <Text style={styles.standStat}>{row.played}</Text>
-      <Text style={styles.standStat}>{row.won}</Text>
-      <Text style={styles.standStat}>{row.drawn}</Text>
-      <Text style={styles.standStat}>{row.lost}</Text>
-      <Text style={styles.standStat}>{gd > 0 ? '+' : ''}{gd}</Text>
-      <Text style={styles.standPts}>{row.points}</Text>
+    <View style={styles.topBar}>
+      {onBack && (
+        <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={styles.topBarBack}>
+          <PixelGlyph kind="chevLeft" color={COLORS.textSecondary} px={2} />
+        </TouchableOpacity>
+      )}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.topBarTitle} numberOfLines={1}>{title}</Text>
+        {subtitle ? <Text style={styles.topBarSub} numberOfLines={1}>{subtitle}</Text> : null}
+      </View>
+      {right}
     </View>
   );
 }
 
-// ─── Main screen ─────────────────────────────────────────────────────────────
-export default function TournamentScreen({ navigation }: Props) {
+// ─── Section header with dashed rule ──────────────────────────────────────────
+function SectionHeader({
+  icon, title, right,
+}: {
+  icon?: GlyphKind;
+  title: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <View style={styles.sectionHeader}>
+      {icon && <PixelGlyph kind={icon} color={COLORS.gold} px={2} />}
+      <Text style={styles.sectionHeaderTitle}>{title}</Text>
+      <View style={styles.sectionHeaderRule} />
+      {right}
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Screen 2 — Standings row
+// ═════════════════════════════════════════════════════════════════════════════
+function StandingsRow({
+  row, pos, isUser, qualifies, last,
+}: {
+  row: TeamStanding;
+  pos: number;
+  isUser: boolean;
+  qualifies: boolean;
+  last: boolean;
+}) {
+  const team = NATIONS_BY_ID[row.teamId];
+  const gd   = row.goalsFor - row.goalsAgainst;
+  return (
+    <View style={[styles.standRow, !last && styles.standRowBorder]}>
+      {qualifies && <View style={styles.standQualBar} />}
+      <Text style={[
+        styles.standPos,
+        qualifies && { color: COLORS.green, fontWeight: '800' },
+        isUser && !qualifies && { color: COLORS.gold },
+      ]}>
+        {pos}
+      </Text>
+      <View style={styles.standTeamCell}>
+        {team && <PixelFlag isoCode={team.isoCode} size={16} />}
+        <Text
+          style={[styles.standName, isUser && styles.standNameUser]}
+          numberOfLines={1}
+        >
+          {team?.code3 ?? row.teamId.toUpperCase()}
+        </Text>
+        {isUser && <Text style={styles.standMarker}>◂</Text>}
+      </View>
+      <Text style={styles.standStat}>{row.played}</Text>
+      <Text style={styles.standStat}>{row.won}</Text>
+      <Text style={styles.standStat}>{row.drawn}</Text>
+      <Text style={styles.standStat}>{row.lost}</Text>
+      <Text style={[styles.standStat, gd < 0 && { color: COLORS.textMuted }]}>
+        {gd > 0 ? '+' : ''}{gd}
+      </Text>
+      <Text style={[styles.standPts, isUser && { color: COLORS.gold }]}>{row.points}</Text>
+    </View>
+  );
+}
+
+// ─── Screen 2 — Match card ────────────────────────────────────────────────────
+function GroupMatchCard({
+  fixture, homeTeam, awayTeam, result, isUserHome, isAnimating,
+  selectedNationId, onQuickSim, onLongSim, onPenalties, locked,
+}: {
+  fixture: typeof GROUP_FIXTURES[number];
+  homeTeam: import('../types/simulator').Team | undefined;
+  awayTeam: import('../types/simulator').Team | undefined;
+  result: import('../types/matchResult').MatchResult | null;
+  isUserHome: boolean;
+  isAnimating: boolean;
+  selectedNationId: string;
+  onQuickSim: () => void;
+  onLongSim: () => void;
+  onPenalties: () => void;
+  locked: boolean;
+}) {
+  const [dispHome, setDispHome] = useState(result?.homeScore ?? 0);
+  const [dispAway, setDispAway] = useState(result?.awayScore ?? 0);
+
+  useEffect(() => {
+    if (!result) { setDispHome(0); setDispAway(0); return; }
+    if (isAnimating) {
+      const c1 = animateScore(result.homeScore, setDispHome);
+      const c2 = animateScore(result.awayScore, setDispAway);
+      return () => { c1(); c2(); };
+    } else {
+      setDispHome(result.homeScore);
+      setDispAway(result.awayScore);
+    }
+  }, [result?.homeScore, result?.awayScore, isAnimating]);
+
+  if (!homeTeam || !awayTeam) return null;
+
+  const isPlayed    = !!result;
+  const userScore   = result ? (isUserHome ? result.homeScore : result.awayScore) : 0;
+  const oppScore    = result ? (isUserHome ? result.awayScore : result.homeScore) : 0;
+  const won         = isPlayed && userScore > oppScore;
+  const lost        = isPlayed && userScore < oppScore;
+  const resultLabel = isPlayed ? (won ? 'WIN' : lost ? 'LOSS' : 'DRAW') : '';
+  const resultColor = won ? '#94C952' : lost ? COLORS.red : COLORS.textSecondary;
+  const borderColor = isPlayed ? (won ? COLORS.green : lost ? COLORS.red : COLORS.border) : COLORS.border;
+
+  return (
+    <View style={[styles.matchShadow]}>
+      <View style={[styles.matchCard, { borderColor }]}>
+        <View style={styles.matchCardHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.mdBadge}>
+              <Text style={styles.mdBadgeText}>MD {fixture.matchday}</Text>
+            </View>
+            <Text style={styles.matchVenue} numberOfLines={1}>{fixture.venue}</Text>
+          </View>
+          {isPlayed ? (
+            <View style={[
+              styles.resultPill,
+              { backgroundColor: won ? 'rgba(148,201,82,0.15)' : lost ? 'rgba(194,52,11,0.15)' : 'rgba(148,176,192,0.1)',
+                borderColor: won ? COLORS.green : lost ? COLORS.red : COLORS.border },
+            ]}>
+              <Text style={[styles.resultPillText, { color: resultColor }]}>{resultLabel}</Text>
+            </View>
+          ) : (
+            <Text style={styles.matchDate}>{fixture.date}</Text>
+          )}
+        </View>
+
+        <View style={styles.matchTeamsRow}>
+          <View style={[styles.matchTeamSide, { justifyContent: 'flex-end' }]}>
+            <Text
+              style={[styles.matchTeamName, homeTeam.id === selectedNationId && styles.matchTeamNameUser]}
+              numberOfLines={1}
+            >
+              {homeTeam.code3}
+            </Text>
+            <PixelFlag isoCode={homeTeam.isoCode} size={22} />
+          </View>
+          <View style={styles.matchScoreBox}>
+            {isPlayed ? (
+              <Text style={styles.matchScore}>{dispHome}<Text style={styles.matchScoreDash}>–</Text>{dispAway}</Text>
+            ) : (
+              <Text style={styles.matchVs}>VS</Text>
+            )}
+          </View>
+          <View style={[styles.matchTeamSide, { justifyContent: 'flex-start' }]}>
+            <PixelFlag isoCode={awayTeam.isoCode} size={22} />
+            <Text
+              style={[styles.matchTeamName, awayTeam.id === selectedNationId && styles.matchTeamNameUser]}
+              numberOfLines={1}
+            >
+              {awayTeam.code3}
+            </Text>
+          </View>
+        </View>
+
+        {!isPlayed && !locked && (
+          <View style={styles.matchBtns}>
+            <TouchableOpacity style={styles.simBtnOutline} onPress={onLongSim} activeOpacity={0.8}>
+              <Text style={styles.simBtnOutlineText}>LONG SIM</Text>
+              <Text style={styles.simBtnSub}>Watch</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.simBtnGold} onPress={onQuickSim} activeOpacity={0.8}>
+              <Text style={styles.simBtnGoldText}>QUICK</Text>
+              <Text style={[styles.simBtnSub, { color: 'rgba(11,23,31,0.7)' }]}>Instant</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.simBtnTeal} onPress={onPenalties} activeOpacity={0.8}>
+              <Text style={styles.simBtnTealText}>PENALTY</Text>
+              <Text style={[styles.simBtnSub, { color: COLORS.teal }]}>Shootout</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {!isPlayed && locked && (
+          <View style={styles.matchLockedRow}>
+            <Text style={styles.matchLockedText}>🔒 Play previous matchday first</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ─── Stat block (Screen 4) ────────────────────────────────────────────────────
+function StatBlock({ label, value, accent }: { label: string; value: string | number; accent?: string }) {
+  return (
+    <View style={styles.statBlock}>
+      <Text style={[styles.statBlockValue, accent ? { color: accent } : null]}>{value}</Text>
+      <Text style={styles.statBlockLabel}>{label}</Text>
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Main screen
+// ═════════════════════════════════════════════════════════════════════════════
+export default function TournamentScreen(_props: Props) {
   // ── Stores ──────────────────────────────────────────────────────────────
   const {
     isActive, hasWon, isEliminated, eliminatedAt, eliminatedBy,
@@ -313,8 +494,7 @@ export default function TournamentScreen({ navigation }: Props) {
   const standings        = useTournamentMatchStore((s) => s.standings);
   const knockoutResults  = useTournamentMatchStore((s) => s.knockoutResults);
   const clearAllKnockoutResults = useTournamentMatchStore((s) => s.clearAllKnockoutResults);
-  const clearAllResults        = useTournamentMatchStore((s) => s.clearAll);
-
+  const clearAllResults         = useTournamentMatchStore((s) => s.clearAll);
 
   // ── Derived nation data ──────────────────────────────────────────────────
   const userNation = selectedNationId ? NATIONS_BY_ID[selectedNationId] : null;
@@ -331,41 +511,32 @@ export default function TournamentScreen({ navigation }: Props) {
     [userGroup, selectedNationId],
   );
 
-  // ── All group fixtures (to know if all 3 played) ─────────────────────────
   const allUserGroupPlayed = userGroupFixtures.every((f) => f.id in results);
 
-  // ── Group standings for user's group ────────────────────────────────────
   const groupStandings = useMemo(() =>
     userGroup ? selectTournamentStandings(standings, userGroup) : [],
     [standings, userGroup],
   );
 
-  // User's position in group (1-based)
   const userPosition = useMemo(() =>
     groupStandings.findIndex((s) => s.teamId === selectedNationId) + 1,
     [groupStandings, selectedNationId],
   );
 
-  // ── Qualification determination ──────────────────────────────────────────
-  // Returns: 'qualified' | 'eliminated' | 'pending'
   const qualificationStatus = useMemo((): 'qualified' | 'eliminated' | 'pending' => {
     if (!allUserGroupPlayed) return 'pending';
     if (userPosition <= 2) return 'qualified';
     if (userPosition === 4) return 'eliminated';
-    // 3rd place: check if user is in the best 8 third-placers
-    // getBestThirdPlacers returns null until all 12 groups are complete
     const best8 = getBestThirdPlacers(standings, results);
-    if (best8 === null) return 'pending'; // other groups still in progress
+    if (best8 === null) return 'pending';
     return best8.some((t: { teamId: string }) => t.teamId === selectedNationId) ? 'qualified' : 'eliminated';
   }, [allUserGroupPlayed, userPosition, standings, results, selectedNationId]);
 
-  // ── Resolved knockout bracket ────────────────────────────────────────────
   const resolvedBracket = useMemo(
     () => resolveKnockoutBracket(standings, results, knockoutResults),
     [standings, results, knockoutResults],
   );
 
-  // ── User's next knockout match ───────────────────────────────────────────
   const userNextMatch = useMemo(() => {
     if (!selectedNationId) return null;
     return resolvedBracket.find(
@@ -375,7 +546,6 @@ export default function TournamentScreen({ navigation }: Props) {
     ) ?? null;
   }, [resolvedBracket, selectedNationId]);
 
-  // Check if user was knocked out (exists in a result as loser)
   const userLastKnockoutMatch = useMemo(() => {
     if (!selectedNationId) return null;
     return resolvedBracket
@@ -387,7 +557,6 @@ export default function TournamentScreen({ navigation }: Props) {
       .pop() ?? null;
   }, [resolvedBracket, selectedNationId]);
 
-  // Detect win or loss in knockout (run once when relevant match result appears)
   useEffect(() => {
     if (!isActive || isEliminated || hasWon || !selectedNationId) return;
     if (!allUserGroupPlayed) return;
@@ -395,14 +564,12 @@ export default function TournamentScreen({ navigation }: Props) {
       setEliminated('groups', '');
       return;
     }
-
     if (!userLastKnockoutMatch?.result) return;
     const r = userLastKnockoutMatch.result;
     const userIsHome = r.homeTeamId === selectedNationId;
     const userScore  = userIsHome ? r.homeScore : r.awayScore;
     const oppScore   = userIsHome ? r.awayScore : r.homeScore;
     const oppId      = userIsHome ? r.awayTeamId : r.homeTeamId;
-
     if (userScore < oppScore) {
       const round = userLastKnockoutMatch.def.round as KnockoutRound;
       setEliminated(round, oppId);
@@ -412,7 +579,6 @@ export default function TournamentScreen({ navigation }: Props) {
   }, [userLastKnockoutMatch, qualificationStatus, allUserGroupPlayed, isActive, isEliminated, hasWon]);
 
   // ── Helper: sim all remaining group fixtures (excluding user's own) ─────
-  // Used by both the safety net and the 3rd-place auto-resolve effect.
   function simMissingGroupFixtures() {
     const freshResults   = useTournamentMatchStore.getState().results;
     const userFixtureIds = new Set((userGroupFixtures ?? []).map((f) => f.id));
@@ -420,7 +586,6 @@ export default function TournamentScreen({ navigation }: Props) {
       (f) => !(f.id in freshResults) && !userFixtureIds.has(f.id),
     );
     if (missing.length === 0) return;
-    console.log(`[Tournament] Simulating ${missing.length} missing group fixtures`);
     for (const f of missing) {
       const h = NATIONS_BY_ID[f.homeTeamId];
       const a = NATIONS_BY_ID[f.awayTeamId];
@@ -434,8 +599,6 @@ export default function TournamentScreen({ navigation }: Props) {
     }
   }
 
-  // ── Safety net: if we somehow enter knockout with missing group fixtures ───
-  // Fires at most once per component lifetime (safetyNetRanRef guard).
   const inKnockoutPhase = qualificationStatus === 'qualified' && allUserGroupPlayed;
   const safetyNetRanRef = useRef(false);
   useEffect(() => {
@@ -445,8 +608,6 @@ export default function TournamentScreen({ navigation }: Props) {
     simMissingGroupFixtures();
   }, [inKnockoutPhase]);
 
-  // ── 3rd-place auto-resolve: sim all other groups so qualification can be determined ──
-  // Fires once when user finishes all 3 group matches in 3rd place.
   const thirdPlaceAutoRanRef = useRef(false);
   const userFinishedThird = allUserGroupPlayed && userPosition === 3;
   useEffect(() => {
@@ -457,9 +618,6 @@ export default function TournamentScreen({ navigation }: Props) {
   }, [userFinishedThird]);
 
   // ── Action: simulate a group match ──────────────────────────────────────
-  // Uses useTournamentMatchStore.getState() directly to bypass React batching.
-  // After saving the user's result, immediately sims ALL remaining group
-  // fixtures in one synchronous pass — guaranteed to see fresh store state.
   const handleSimulateGroup = useCallback((fixtureId: string) => {
     const fixture = GROUP_FIXTURES.find((f) => f.id === fixtureId);
     if (!fixture) return;
@@ -467,7 +625,6 @@ export default function TournamentScreen({ navigation }: Props) {
     const away = NATIONS_BY_ID[fixture.awayTeamId];
     if (!home || !away) return;
 
-    // Step 1: save user's own match
     const events = simulateMatch(home, away, 'en');
     const score  = computeScore(events, home.id, away.id);
     useTournamentMatchStore.getState().saveResult({
@@ -480,13 +637,11 @@ export default function TournamentScreen({ navigation }: Props) {
       simulatedAt: Date.now(),
     });
 
-    // Step 2: read fresh state and sim every remaining group fixture (skip user's own)
     const freshResults   = useTournamentMatchStore.getState().results;
     const userFixtureIds = new Set(userGroupFixtures.map((f) => f.id));
     const remaining      = GROUP_FIXTURES.filter(
       (f) => !(f.id in freshResults) && !userFixtureIds.has(f.id),
     );
-    console.log(`[AutoSim] Simulating ${remaining.length} remaining fixtures...`);
     for (const f of remaining) {
       const h = NATIONS_BY_ID[f.homeTeamId];
       const a = NATIONS_BY_ID[f.awayTeamId];
@@ -498,7 +653,6 @@ export default function TournamentScreen({ navigation }: Props) {
         homeScore: sc.home, awayScore: sc.away, events: evts, simulatedAt: Date.now(),
       });
     }
-    console.log('[AutoSim] Done');
   }, [userGroupFixtures]);
 
   // ── Action: simulate a knockout match ───────────────────────────────────
@@ -511,7 +665,6 @@ export default function TournamentScreen({ navigation }: Props) {
     if (!home || !away) return;
     const events = simulateMatch(home, away, 'en');
     const score  = computeScore(events, home.id, away.id);
-    // Handle draw: home team wins (no extra time in quick sim)
     const finalHome = score.home === score.away ? score.home + 1 : score.home;
     useTournamentMatchStore.getState().saveKnockoutResult({
       matchId:    def.id,
@@ -523,7 +676,6 @@ export default function TournamentScreen({ navigation }: Props) {
       simulatedAt: Date.now(),
     });
 
-    // Auto-sim all other resolvable KO matches (multi-pass until nothing new)
     for (let pass = 0; pass < 32; pass++) {
       const s        = useTournamentMatchStore.getState();
       const resolved = resolveKnockoutBracket(s.standings, s.results, s.knockoutResults);
@@ -557,8 +709,6 @@ export default function TournamentScreen({ navigation }: Props) {
     }
   }, [userNextMatch, selectedNationId]);
 
-
-  // ── Score animation: track which group fixture was just quick-simmed ──────
   const [justSimmedGroupId, setJustSimmedGroupId] = useState<string | null>(null);
 
   const handleSimulateGroupAnimated = useCallback((fixtureId: string) => {
@@ -568,28 +718,43 @@ export default function TournamentScreen({ navigation }: Props) {
   }, [handleSimulateGroup]);
 
   // ── Share result ──────────────────────────────────────────────────────────
-  const handleShare = useCallback(async (nationName: string) => {
+  const handleShare = useCallback(async (nationId: string, nationName: string) => {
     try {
+      const phrase = CHAMPION_PHRASES[nationId] ?? GENERIC_PHRASE;
       await Share.share({
-        message: `🏆 ${nationName} won the World Cup 2026! #Fitbolpix #WC2026`,
+        message:
+          `🏆 I just won the 2026 World Cup with ${nationName} on FiTBOLPiX!\n` +
+          `${phrase.local}\n` +
+          `#FiTBOLPiX #WC2026`,
       });
     } catch (_) {}
   }, []);
 
   // ── Action: start tournament ─────────────────────────────────────────────
-  const [pickedNation, setPickedNation] = React.useState<string | null>(null);
+  const [pickedNation, setPickedNation] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery]   = useState('');
+
+  const filteredNations = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return NATIONS;
+    return NATIONS.filter(
+      (n) =>
+        n.name.toLowerCase().includes(q) ||
+        n.code3.toLowerCase().includes(q) ||
+        n.id.toLowerCase().includes(q) ||
+        n.group.toLowerCase() === q,
+    );
+  }, [searchQuery]);
 
   const handleBeginJourney = useCallback(() => {
     if (!pickedNation) return;
     const nation = NATIONS_BY_ID[pickedNation];
     if (!nation) return;
-    // Clear ALL tournament match data and restart fresh
     clearAllResults();
     clearAllKnockoutResults();
     startTournament(pickedNation);
   }, [pickedNation, clearAllResults, clearAllKnockoutResults, startTournament]);
 
-  // ── Action: reset / try again ─────────────────────────────────────────────
   const handleReset = useCallback(() => {
     clearAllResults();
     clearAllKnockoutResults();
@@ -597,7 +762,6 @@ export default function TournamentScreen({ navigation }: Props) {
     setPickedNation(null);
   }, [clearAllResults, clearAllKnockoutResults, resetTournament]);
 
-  // ── Action: start over (escape hatch from any stuck state) ───────────────
   const handleStartOver = useCallback(() => {
     Alert.alert(
       'Start over?',
@@ -618,11 +782,13 @@ export default function TournamentScreen({ navigation }: Props) {
     );
   }, [clearAllResults, clearAllKnockoutResults, resetTournament]);
 
-  // ── Overlay state (inline WebViews for sim + penalty) ─────────────────
+  // ── Overlay state ─────────────────────────────────────────────────────────
   const [penOverlay, setPenOverlay] = useState<PenaltyOverlay | null>(null);
   const [simOverlay, setSimOverlay] = useState<SimOverlay | null>(null);
 
-  // ── Helper: auto-sim all resolvable KO matches (not involving user) ──
+  // ── KO sub-tab state ──────────────────────────────────────────────────────
+  const [koTab, setKoTab] = useState<'tree' | 'match'>('match');
+
   const autoSimKnockout = useCallback(() => {
     for (let pass = 0; pass < 32; pass++) {
       const s        = useTournamentMatchStore.getState();
@@ -652,7 +818,37 @@ export default function TournamentScreen({ navigation }: Props) {
     }
   }, [selectedNationId]);
 
-  // ── Launch group LONG SIM overlay ──────────────────────────────────
+  // ── Finish tournament: sim every remaining KO match (incl. any involving
+  // the user — e.g. the 3rd-place match when the user lost in the SF), then
+  // transition to the Champion screen. Same Quick Sim logic as handleSimulateKnockout.
+  const handleFinishTournament = useCallback(() => {
+    for (let pass = 0; pass < 32; pass++) {
+      const s        = useTournamentMatchStore.getState();
+      const resolved = resolveKnockoutBracket(s.standings, s.results, s.knockoutResults);
+      let simmedAny  = false;
+      for (const match of resolved) {
+        if (
+          match.homeTeamId && match.awayTeamId &&
+          !s.knockoutResults[match.def.id]
+        ) {
+          const h = NATIONS_BY_ID[match.homeTeamId];
+          const a = NATIONS_BY_ID[match.awayTeamId];
+          if (!h || !a) continue;
+          const evts = simulateMatch(h, a, 'en');
+          const sc   = computeScore(evts, h.id, a.id);
+          const hs   = sc.home === sc.away ? sc.home + 1 : sc.home;
+          useTournamentMatchStore.getState().saveKnockoutResult({
+            matchId: match.def.id, homeTeamId: h.id, awayTeamId: a.id,
+            homeScore: hs, awayScore: sc.away, events: evts, simulatedAt: Date.now(),
+          });
+          simmedAny = true;
+        }
+      }
+      if (!simmedAny) break;
+    }
+    setWon();
+  }, [setWon]);
+
   const handleGroupLongSim = useCallback((fixtureId: string) => {
     const fixture = GROUP_FIXTURES.find((f) => f.id === fixtureId);
     if (!fixture) return;
@@ -669,7 +865,6 @@ export default function TournamentScreen({ navigation }: Props) {
     });
   }, []);
 
-  // ── Launch group PENALTIES overlay ─────────────────────────────────
   const handleGroupPenalties = useCallback((fixtureId: string) => {
     const fixture = GROUP_FIXTURES.find((f) => f.id === fixtureId);
     if (!fixture) return;
@@ -682,26 +877,21 @@ export default function TournamentScreen({ navigation }: Props) {
     });
   }, [selectedNationId]);
 
-  // ── Reset a single group match result ────────────────────────────
   const handleResetGroupMatch = useCallback((fixtureId: string) => {
     const fixture = GROUP_FIXTURES.find((f) => f.id === fixtureId);
     if (!fixture) return;
     const group = fixture.group;
-    // Collect all other results in this group (excluding the one being reset)
     const currentResults = useTournamentMatchStore.getState().results;
     const groupFixtures = GROUP_FIXTURES.filter((f) => f.group === group);
     const otherResults = groupFixtures
       .filter((f) => f.id !== fixtureId && currentResults[f.id])
       .map((f) => currentResults[f.id]);
-    // Clear all group results (resets standings too)
     useTournamentMatchStore.getState().clearGroupResults(group);
-    // Re-save the remaining results (recalculates standings each time)
     for (const r of otherResults) {
       useTournamentMatchStore.getState().saveResult(r);
     }
   }, []);
 
-  // ── Launch knockout LONG SIM overlay ───────────────────────────────
   const handleKnockoutLongSim = useCallback(() => {
     if (!userNextMatch) return;
     const { def, homeTeamId, awayTeamId } = userNextMatch;
@@ -719,7 +909,6 @@ export default function TournamentScreen({ navigation }: Props) {
     });
   }, [userNextMatch]);
 
-  // ── Launch knockout PENALTIES overlay ──────────────────────────────
   const handleKnockoutPenalties = useCallback(() => {
     if (!userNextMatch) return;
     const { def, homeTeamId, awayTeamId } = userNextMatch;
@@ -733,7 +922,6 @@ export default function TournamentScreen({ navigation }: Props) {
     });
   }, [userNextMatch, selectedNationId]);
 
-  // ── Handle sim overlay result ──────────────────────────────────────
   const handleSimMessage = useCallback((event: WebViewMessageEvent) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
@@ -742,13 +930,11 @@ export default function TournamentScreen({ navigation }: Props) {
       if (!ov) return;
 
       if (ov.fixtureId && !ov.matchId) {
-        // Group stage sim — save result and auto-sim remaining
         useTournamentMatchStore.getState().saveResult({
           fixtureId: ov.fixtureId, homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
           homeScore: ov.simScore.home, awayScore: ov.simScore.away,
           events: ov.simEvents, simulatedAt: Date.now(),
         });
-        // Auto-sim remaining group fixtures
         const freshResults = useTournamentMatchStore.getState().results;
         const userFixtureIds = new Set(userGroupFixtures.map((f) => f.id));
         const remaining = GROUP_FIXTURES.filter(
@@ -767,11 +953,9 @@ export default function TournamentScreen({ navigation }: Props) {
         }
         setSimOverlay(null);
       } else if (ov.matchId != null) {
-        // Knockout sim — check for draw → trigger penalty
         const hs = ov.simScore.home;
         const as_ = ov.simScore.away;
         if (hs === as_) {
-          // Draw in knockout → close sim, launch penalty sudden_death
           setSimOverlay(null);
           setPenOverlay({
             key: `pen-ko-draw-${ov.matchId}-${Date.now()}`,
@@ -780,7 +964,6 @@ export default function TournamentScreen({ navigation }: Props) {
             userTeam: ov.homeTeamId === selectedNationId ? 'home' : 'away',
           });
         } else {
-          // Clear winner — save directly
           useTournamentMatchStore.getState().saveKnockoutResult({
             matchId: ov.matchId, homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
             homeScore: hs, awayScore: as_, events: ov.simEvents, simulatedAt: Date.now(),
@@ -790,15 +973,13 @@ export default function TournamentScreen({ navigation }: Props) {
         }
       }
     } catch (_) {}
-  }, [simOverlay, userGroupFixtures, autoSimKnockout]);
+  }, [simOverlay, userGroupFixtures, autoSimKnockout, selectedNationId]);
 
-  // ── Handle penalty overlay result ──────────────────────────────────
   const handlePenMessage = useCallback((event: WebViewMessageEvent) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
       if (msg.type === 'back') { setPenOverlay(null); return; }
       if (msg.type === 'restart') {
-        // Re-launch with new key
         if (penOverlay) setPenOverlay({ ...penOverlay, key: `${penOverlay.key}-r${Date.now()}` });
         return;
       }
@@ -807,13 +988,11 @@ export default function TournamentScreen({ navigation }: Props) {
       if (!ov) return;
 
       if (ov.fixtureId && !ov.matchId) {
-        // Group stage penalty — use penalty score as the match score
         useTournamentMatchStore.getState().saveResult({
           fixtureId: ov.fixtureId, homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
           homeScore: msg.homeScore, awayScore: msg.awayScore,
           events: [], simulatedAt: Date.now(),
         });
-        // Auto-sim remaining group fixtures
         const freshResults = useTournamentMatchStore.getState().results;
         const userFixtureIds = new Set(userGroupFixtures.map((f) => f.id));
         const remaining = GROUP_FIXTURES.filter(
@@ -832,7 +1011,6 @@ export default function TournamentScreen({ navigation }: Props) {
         }
         setPenOverlay(null);
       } else if (ov.matchId != null) {
-        // Knockout penalty
         useTournamentMatchStore.getState().saveKnockoutResult({
           matchId: ov.matchId, homeTeamId: ov.homeTeamId, awayTeamId: ov.awayTeamId,
           homeScore: msg.homeScore, awayScore: msg.awayScore,
@@ -844,456 +1022,7 @@ export default function TournamentScreen({ navigation }: Props) {
     } catch (_) {}
   }, [penOverlay, userGroupFixtures, autoSimKnockout]);
 
-  // ═════════════════════════════════════════════════════════════════════════
-  // PHASE 1 — IDLE (no tournament active)
-  // ═════════════════════════════════════════════════════════════════════════
-  if (!isActive) {
-    return (
-      <SafeAreaView style={styles.root}>
-        <ScrollView contentContainerStyle={styles.idleScroll}>
-          <Text style={styles.journeyTitle}>⚽ YOUR WORLD CUP</Text>
-          <Text style={styles.journeyTitle2}>JOURNEY 2026</Text>
-          <Text style={styles.journeySubtitle}>Pick your nation and write history</Text>
-
-          {/* Nation grid */}
-          <FlatList
-            data={NATIONS}
-            keyExtractor={(t) => t.id}
-            numColumns={4}
-            scrollEnabled={false}
-            contentContainerStyle={styles.nationGrid}
-            renderItem={({ item }) => {
-              const isSelected = item.id === pickedNation;
-              return (
-                <TouchableOpacity
-                  style={[styles.nationTile, isSelected && styles.nationTileSelected]}
-                  onPress={() => setPickedNation(item.id)}
-                  activeOpacity={0.7}
-                >
-                  <PixelFlag isoCode={item.isoCode} size={22} />
-                  <Text style={[styles.nationTileName, isSelected && styles.nationTileNameSel]} numberOfLines={1}>
-                    {item.code3}
-                  </Text>
-                </TouchableOpacity>
-              );
-            }}
-          />
-
-          {/* Selected nation detail card */}
-          {pickedNation && NATIONS_BY_ID[pickedNation] && (
-            <View style={styles.selectedCard}>
-              <PixelFlag isoCode={NATIONS_BY_ID[pickedNation].isoCode} size={56} />
-              <View style={styles.selectedCardInfo}>
-                <Text style={styles.selectedCardName}>{NATIONS_BY_ID[pickedNation].name}</Text>
-                <Text style={styles.selectedCardGroup}>Group {NATIONS_BY_ID[pickedNation].group}</Text>
-                <EloBar strength={NATIONS_BY_ID[pickedNation].strength} />
-              </View>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={[styles.beginBtn, !pickedNation && styles.beginBtnDisabled]}
-            onPress={handleBeginJourney}
-            activeOpacity={pickedNation ? 0.8 : 1}
-          >
-            <Text style={styles.beginBtnText}>BEGIN JOURNEY ▶</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // ═════════════════════════════════════════════════════════════════════════
-  // PHASE 4 — WINNER
-  // ═════════════════════════════════════════════════════════════════════════
-  if (hasWon && userNation) {
-    // Compute overall stats from all user matches
-    const userStats = computeUserStats(selectedNationId!, results, knockoutResults);
-    return (
-      <SafeAreaView style={[styles.root, styles.winnerRoot]}>
-        <Confetti />
-        <TouchableOpacity style={styles.startOverBtn} onPress={handleStartOver} activeOpacity={0.7}>
-          <Text style={styles.startOverBtnText}>↺ Reset</Text>
-        </TouchableOpacity>
-        <ScrollView contentContainerStyle={styles.winnerScroll}>
-          <Text style={styles.winnerTrophy}>🏆</Text>
-          <Text style={styles.winnerTitle}>WORLD CUP</Text>
-          <Text style={styles.winnerTitle2}>CHAMPIONS!</Text>
-          <View style={styles.winnerFlagRow}>
-            <PixelFlag isoCode={userNation.isoCode} size={64} />
-          </View>
-          <Text style={styles.winnerNation}>{userNation.name.toUpperCase()}</Text>
-          <Text style={styles.winnerSub}>WON THE WORLD CUP 2026!</Text>
-
-          <View style={styles.statsCard}>
-            <Text style={styles.statsTitle}>TOURNAMENT STATS</Text>
-            <View style={styles.statsRow}>
-              {(['P','W','D','L','GF','GA'] as const).map((label, i) => (
-                <View key={label} style={styles.statCell}>
-                  <Text style={styles.statLabel}>{label}</Text>
-                  <Text style={styles.statValue}>{[
-                    userStats.played, userStats.won, userStats.drawn,
-                    userStats.lost, userStats.gf, userStats.ga,
-                  ][i]}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.shareBtn}
-            onPress={() => handleShare(userNation.name)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.shareBtnText}>📤  SHARE YOUR WIN</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.resetBtn} onPress={handleReset} activeOpacity={0.8}>
-            <Text style={styles.resetBtnText}>🔄  PLAY AGAIN</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // ═════════════════════════════════════════════════════════════════════════
-  // PHASE 5 — ELIMINATED
-  // ═════════════════════════════════════════════════════════════════════════
-  if (isEliminated && userNation) {
-    const byTeam    = eliminatedBy ? NATIONS_BY_ID[eliminatedBy] : null;
-    const roundLabel = eliminatedAt === 'groups'
-      ? 'GROUP STAGE'
-      : ROUND_LABELS[eliminatedAt ?? ''] ?? eliminatedAt ?? '';
-    const userStats = computeUserStats(selectedNationId!, results, knockoutResults);
-
-    return (
-      <SafeAreaView style={[styles.root, styles.elimRoot]}>
-        <TouchableOpacity style={styles.startOverBtn} onPress={handleStartOver} activeOpacity={0.7}>
-          <Text style={styles.startOverBtnText}>↺ Reset</Text>
-        </TouchableOpacity>
-        <ScrollView contentContainerStyle={styles.elimScroll}>
-          <Text style={styles.elimEmoji}>💔</Text>
-          <Text style={styles.elimTitle}>ELIMINATED</Text>
-          <Text style={styles.elimRound}>at the {roundLabel}</Text>
-
-          {byTeam && (
-            <View style={styles.elimByCard}>
-              <Text style={styles.elimByLabel}>Beaten by</Text>
-              <Text style={styles.elimByFlag}>{byTeam.flag}</Text>
-              <Text style={styles.elimByName}>{byTeam.name}</Text>
-            </View>
-          )}
-
-          <Text style={styles.elimNation}>{userNation.flag} {userNation.name}</Text>
-
-          <View style={styles.statsCard}>
-            <Text style={styles.statsTitle}>TOURNAMENT STATS</Text>
-            <View style={styles.statsRow}>
-              {(['P','W','D','L','GF','GA'] as const).map((label, i) => (
-                <View key={label} style={styles.statCell}>
-                  <Text style={styles.statLabel}>{label}</Text>
-                  <Text style={styles.statValue}>{[
-                    userStats.played, userStats.won, userStats.drawn,
-                    userStats.lost, userStats.gf, userStats.ga,
-                  ][i]}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.resetBtn} onPress={handleReset} activeOpacity={0.8}>
-            <Text style={styles.resetBtnText}>TRY AGAIN →</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // ═════════════════════════════════════════════════════════════════════════
-  // PHASE 2 — GROUP STAGE
-  // ═════════════════════════════════════════════════════════════════════════
-  // inKnockoutPhase is declared above (used by safety-net useEffect)
-
-  if (!inKnockoutPhase && userNation && userGroup) {
-    const allGroupFixtures = GROUP_FIXTURES.filter((f) => f.group === userGroup);
-
-    return (
-      <SafeAreaView style={styles.root}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-          {/* Header */}
-          <View style={styles.groupHeader}>
-            <Text style={styles.groupLabel}>GROUP {userGroup}</Text>
-            <Text style={styles.groupNationBadge}>
-              {userNation.flag}  {userNation.name}
-            </Text>
-            <TouchableOpacity onPress={handleStartOver} activeOpacity={0.7} style={styles.startOverBtn}>
-              <Text style={styles.startOverBtnText}>↺ Reset</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Standings table */}
-          <View style={styles.tableCard}>
-            <View style={styles.tableHeaderRow}>
-              <Text style={styles.tableHPos}>#</Text>
-              <Text style={[styles.tableHName, { marginLeft: 28 }]}>TEAM</Text>
-              <Text style={styles.tableHStat}>P</Text>
-              <Text style={styles.tableHStat}>W</Text>
-              <Text style={styles.tableHStat}>D</Text>
-              <Text style={styles.tableHStat}>L</Text>
-              <Text style={styles.tableHStat}>GD</Text>
-              <Text style={styles.tableHPts}>PTS</Text>
-            </View>
-            {groupStandings.length > 0
-              ? groupStandings.map((row, i) => (
-                  <StandingsRow
-                    key={row.teamId}
-                    row={row}
-                    pos={i + 1}
-                    isUser={row.teamId === selectedNationId}
-                  />
-                ))
-              : allGroupFixtures
-                  .map((f) => [f.homeTeamId, f.awayTeamId])
-                  .flat()
-                  .filter((id, idx, arr) => arr.indexOf(id) === idx)
-                  .map((teamId, i) => {
-                    const t = NATIONS_BY_ID[teamId];
-                    return (
-                      <View key={teamId} style={[styles.standRow, teamId === selectedNationId && styles.standRowUser]}>
-                        <Text style={styles.standPos}>{i + 1}</Text>
-                        <Text style={styles.standFlag}>{t?.flag ?? '🏳️'}</Text>
-                        <Text style={[styles.standName, teamId === selectedNationId && styles.standNameUser]}
-                          numberOfLines={1}>
-                          {t?.name ?? teamId}
-                        </Text>
-                        <Text style={styles.standStat}>0</Text>
-                        <Text style={styles.standStat}>0</Text>
-                        <Text style={styles.standStat}>0</Text>
-                        <Text style={styles.standStat}>0</Text>
-                        <Text style={styles.standStat}>0</Text>
-                        <Text style={styles.standPts}>0</Text>
-                      </View>
-                    );
-                  })}
-          </View>
-
-          {/* User's 3 match cards */}
-          <View style={styles.progressRow}>
-            <Text style={styles.sectionTitle}>YOUR MATCHES</Text>
-            <Text style={styles.progressText}>
-              {userGroupFixtures.filter((f) => f.id in results).length} / 3 played
-            </Text>
-          </View>
-          {userGroupFixtures.map((fixture) => {
-            const homeTeam   = NATIONS_BY_ID[fixture.homeTeamId];
-            const awayTeam   = NATIONS_BY_ID[fixture.awayTeamId];
-            const result     = results[fixture.id] ?? null;
-            const isUserHome = fixture.homeTeamId === selectedNationId;
-            const isAnimating = justSimmedGroupId === fixture.id;
-            // Enforce matchday order: MD2 locked until MD1 played, MD3 locked until MD2 played
-            const md1Done = userGroupFixtures.filter((f) => f.matchday === 1 && f.id in results).length === 1;
-            const md2Done = userGroupFixtures.filter((f) => f.matchday === 2 && f.id in results).length === 1;
-            const isLocked = (fixture.matchday === 2 && !md1Done) || (fixture.matchday === 3 && !md2Done);
-
-            return (
-              <GroupMatchCard
-                key={fixture.id}
-                fixture={fixture}
-                homeTeam={homeTeam}
-                awayTeam={awayTeam}
-                result={result}
-                isUserHome={isUserHome}
-                isAnimating={isAnimating}
-                selectedNationId={selectedNationId!}
-                onQuickSim={() => handleSimulateGroupAnimated(fixture.id)}
-                onLongSim={() => handleGroupLongSim(fixture.id)}
-                onPenalties={() => handleGroupPenalties(fixture.id)}
-                onReset={() => handleResetGroupMatch(fixture.id)}
-                showReset={false}
-                locked={isLocked}
-              />
-            );
-          })}
-
-          {/* Qualification status */}
-          {allUserGroupPlayed && (
-            <View style={[
-              styles.qualBanner,
-              qualificationStatus === 'qualified' && styles.qualBannerGreen,
-              qualificationStatus === 'eliminated' && styles.qualBannerRed,
-              qualificationStatus === 'pending'    && styles.qualBannerYellow,
-            ]}>
-              {qualificationStatus === 'qualified' && (
-                <>
-                  <Text style={styles.qualEmoji}>🎉</Text>
-                  <Text style={styles.qualText}>QUALIFIED! {userNation.name} advance to the Round of 32!</Text>
-                </>
-              )}
-              {qualificationStatus === 'eliminated' && (
-                <>
-                  <Text style={styles.qualEmoji}>💔</Text>
-                  <Text style={styles.qualText}>Eliminated at the group stage.</Text>
-                </>
-              )}
-              {qualificationStatus === 'pending' && (
-                <>
-                  <Text style={styles.qualEmoji}>⏳</Text>
-                  <Text style={styles.qualText}>3rd place — awaiting results from other groups...</Text>
-                </>
-              )}
-            </View>
-          )}
-
-          {qualificationStatus === 'qualified' && (
-            <TouchableOpacity style={styles.advanceBtn} onPress={() => {/* already advances via phase check */}} activeOpacity={0.8}>
-              <Text style={styles.advanceBtnText}>ADVANCE TO KNOCKOUTS →</Text>
-            </TouchableOpacity>
-          )}
-        </ScrollView>
-        {renderOverlays()}
-      </SafeAreaView>
-    );
-  }
-
-  // ═════════════════════════════════════════════════════════════════════════
-  // PHASE 3 — KNOCKOUT
-  // ═════════════════════════════════════════════════════════════════════════
-  if (userNation) {
-    const nextMatch = userNextMatch;
-    const opponent  = nextMatch
-      ? NATIONS_BY_ID[
-          nextMatch.homeTeamId === selectedNationId
-            ? (nextMatch.awayTeamId ?? '')
-            : (nextMatch.homeTeamId ?? '')
-        ]
-      : null;
-
-    const roundLabel  = nextMatch ? (ROUND_LABELS[nextMatch.def.round] ?? nextMatch.def.round) : '';
-    const isUnderdog  = opponent ? opponent.strength > (userNation.strength + 50) : false;
-    const isFavourite = opponent ? (userNation.strength > opponent.strength + 50) : false;
-
-    // Count rounds already won in knockout
-    const kWins = resolvedBracket.filter((m) => {
-      if (!m.result) return false;
-      const isHome = m.result.homeTeamId === selectedNationId;
-      const uScore = isHome ? m.result.homeScore : m.result.awayScore;
-      const oScore = isHome ? m.result.awayScore : m.result.homeScore;
-      return uScore > oScore;
-    }).length;
-
-    return (
-      <SafeAreaView style={styles.root}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-          {/* Header */}
-          <View style={styles.koHeader}>
-            <Text style={styles.koNationBadge}>{userNation.flag} {userNation.name}</Text>
-            <Text style={styles.koWinCount}>{kWins} knockout win{kWins !== 1 ? 's' : ''} 🏆</Text>
-            <TouchableOpacity onPress={handleStartOver} activeOpacity={0.7}>
-              <Text style={styles.startOverBtnText}>↺ Reset</Text>
-            </TouchableOpacity>
-          </View>
-
-          {nextMatch && opponent ? (
-            <>
-              {/* Round badge */}
-              <View style={styles.roundBadge}>
-                <Text style={styles.roundBadgeText}>{roundLabel}</Text>
-              </View>
-
-              {/* Match card */}
-              <View style={styles.koMatchCard}>
-                <Text style={styles.koMatchDate}>{nextMatch.def.date}  ·  {nextMatch.def.venue}</Text>
-
-                <View style={styles.koMatchTeams}>
-                  <View style={styles.koTeamSide}>
-                    <PixelFlag isoCode={userNation.isoCode} size={40} />
-                    <Text style={styles.koTeamName} numberOfLines={1}>{userNation.name}</Text>
-                    <EloBar strength={userNation.strength} label={false} />
-                  </View>
-                  <Text style={styles.koVs}>VS</Text>
-                  <View style={[styles.koTeamSide, styles.koTeamRight]}>
-                    <PixelFlag isoCode={opponent.isoCode} size={40} />
-                    <Text style={styles.koTeamName} numberOfLines={1}>{opponent.name}</Text>
-                    <EloBar strength={opponent.strength} label={false} />
-                  </View>
-                </View>
-
-                {/* Favourite / Underdog badge */}
-                {(isFavourite || isUnderdog) && (
-                  <View style={[styles.matchupBadge, isUnderdog && styles.matchupBadgeUnderdog]}>
-                    <Text style={styles.matchupBadgeText}>
-                      {isFavourite ? '⚡ You are the FAVOURITE' : '💪 UNDERDOG — Prove them wrong!'}
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.koBtns}>
-                  <TouchableOpacity
-                    style={styles.longSimBtn}
-                    onPress={handleKnockoutLongSim}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.longSimBtnText}>▶ LONG SIM</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.koSimBtn}
-                    onPress={handleSimulateKnockout}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.koSimBtnText}>⚡ QUICK SIM</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.koPenBtn}
-                    onPress={handleKnockoutPenalties}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.koPenBtnText}>🥅 PENALTIES</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Previous knockout results */}
-              {resolvedBracket
-                .filter((m) =>
-                  m.result !== null &&
-                  (m.result.homeTeamId === selectedNationId ||
-                    m.result.awayTeamId === selectedNationId),
-                )
-                .map((m) => {
-                  const r = m.result!;
-                  const isHome = r.homeTeamId === selectedNationId;
-                  const uScore = isHome ? r.homeScore : r.awayScore;
-                  const oScore = isHome ? r.awayScore : r.homeScore;
-                  const oppId  = isHome ? r.awayTeamId : r.homeTeamId;
-                  const opp    = NATIONS_BY_ID[oppId];
-                  const won    = uScore > oScore;
-                  return (
-                    <View key={m.def.id} style={styles.prevResultRow}>
-                      <Text style={styles.prevResultRound}>{ROUND_LABELS[m.def.round] ?? m.def.round}</Text>
-                      <Text style={[styles.prevResultScore, { color: won ? COLORS.success : COLORS.danger }]}>
-                        {uScore}–{oScore}  {won ? '✓' : '✗'}
-                      </Text>
-                      <Text style={styles.prevResultOpp}>{opp?.flag} {opp?.name}</Text>
-                    </View>
-                  );
-                })}
-            </>
-          ) : (
-            // No next match yet — waiting for bracket to resolve
-            <View style={styles.waitingCard}>
-              <Text style={styles.waitingEmoji}>⏳</Text>
-              <Text style={styles.waitingText}>Waiting for bracket to resolve...</Text>
-              <Text style={styles.waitingHint}>
-                Other group results determine your next opponent.
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-        {renderOverlays()}
-      </SafeAreaView>
-    );
-  }
-
-  // ── Overlay rendering helper ──────────────────────────────────────
+  // ── Overlay rendering helper ────────────────────────────────────────────
   function renderOverlays() {
     if (simOverlay) {
       return (
@@ -1352,7 +1081,770 @@ export default function TournamentScreen({ navigation }: Props) {
     return null;
   }
 
-  // Fallback (shouldn't reach here)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCREEN 1 — TEAM SELECT (IDLE)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (!isActive) {
+    const selNation = pickedNation ? NATIONS_BY_ID[pickedNation] : null;
+
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={{ flex: 1 }}>
+          {/* Title block */}
+          <View style={styles.s1Header}>
+            <View style={styles.s1Eyebrow}>
+              <PixelGlyph kind="trophy" color={COLORS.gold} px={2} />
+              <Text style={styles.s1EyebrowText}>CAMPAIGN MODE</Text>
+            </View>
+            <Text style={styles.s1Title}>
+              ROAD TO <Text style={{ color: COLORS.gold }}>GLORY</Text>
+            </Text>
+            <Text style={styles.s1Subtitle}>Pick your nation. Win the World Cup.</Text>
+          </View>
+
+          {/* Search */}
+          <View style={styles.s1SearchWrap}>
+            <View style={styles.s1SearchBox}>
+              <PixelGlyph kind="search" color={COLORS.textMuted} px={2} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search nation or group (e.g. Türkiye, D)"
+                placeholderTextColor={COLORS.textMuted}
+                style={styles.s1SearchInput}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              <Text style={styles.s1SearchCount}>{filteredNations.length}/48</Text>
+            </View>
+          </View>
+
+          {/* Grid */}
+          <FlatList
+            data={filteredNations}
+            keyExtractor={(n) => n.id}
+            numColumns={4}
+            columnWrapperStyle={{ gap: 8 }}
+            contentContainerStyle={styles.s1GridContent}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => {
+              const isSelected = item.id === pickedNation;
+              return (
+                <TouchableOpacity
+                  style={[
+                    styles.s1NationCard,
+                    isSelected && styles.s1NationCardSel,
+                    { width: (SCREEN_W - 32 - 24) / 4 },
+                  ]}
+                  onPress={() => setPickedNation(item.id)}
+                  activeOpacity={0.8}
+                >
+                  {isSelected && (
+                    <View style={styles.s1CheckBadge}>
+                      <PixelGlyph kind="check" color={COLORS.background} px={1.5} />
+                    </View>
+                  )}
+                  <View style={styles.s1NationFlagWrap}>
+                    <PixelFlag isoCode={item.isoCode} size={28} />
+                  </View>
+                  <Text style={[styles.s1NationCode, isSelected && { color: COLORS.gold }]}>
+                    {item.code3}
+                  </Text>
+                  <Text style={styles.s1NationGroup}>GRP {item.group}</Text>
+                  <DifficultyDots strength={item.strength} />
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              <Text style={styles.s1EmptyText}>No nation matches "{searchQuery}"</Text>
+            }
+          />
+
+          {/* Sticky bottom CTA */}
+          <View style={styles.s1BottomBar}>
+            {selNation && (
+              <View style={styles.s1SelectedCard}>
+                <View style={styles.s1SelectedFlag}>
+                  <PixelFlag isoCode={selNation.isoCode} size={28} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.s1SelectedLabel}>SELECTED</Text>
+                  <Text style={styles.s1SelectedName} numberOfLines={1}>
+                    {selNation.name.toUpperCase()}
+                    <Text style={{ color: COLORS.textSecondary }}> · GROUP {selNation.group}</Text>
+                  </Text>
+                </View>
+                <DifficultyDots strength={selNation.strength} dotSize={4} />
+              </View>
+            )}
+            <TouchableOpacity
+              disabled={!pickedNation}
+              onPress={handleBeginJourney}
+              activeOpacity={pickedNation ? 0.85 : 1}
+              style={[styles.s1CtaWrap, !pickedNation && { opacity: 0.5 }]}
+            >
+              <LinearGradient
+                colors={[COLORS.gold, '#B98F1A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.s1Cta}
+              >
+                <Text style={styles.s1CtaText}>⚡ START CAMPAIGN</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCREEN 5 — CHAMPION (WINNER)
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (hasWon && userNation) {
+    const userStats = computeUserStats(selectedNationId!, results, knockoutResults);
+    const phrase = CHAMPION_PHRASES[userNation.id] ?? GENERIC_PHRASE;
+
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={StyleSheet.absoluteFill}>
+          <LinearGradient
+            colors={['#1B1408', COLORS.background]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 0.5 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+        <Confetti />
+        <ScrollView contentContainerStyle={styles.s5Scroll} showsVerticalScrollIndicator={false}>
+          {/* Eyebrow */}
+          <View style={styles.s5Eyebrow}>
+            <Text style={styles.s5EyebrowDiamond}>◆</Text>
+            <Text style={styles.s5EyebrowText}>WORLD CUP 2026 CHAMPIONS</Text>
+            <Text style={styles.s5EyebrowDiamond}>◆</Text>
+          </View>
+
+          {/* Big flag card */}
+          <View style={styles.s5FlagShadow}>
+            <View style={styles.s5FlagCard}>
+              <PixelFlag isoCode={userNation.isoCode} size={100} />
+            </View>
+          </View>
+
+          {/* Nation name */}
+          <Text style={styles.s5Nation} numberOfLines={1}>
+            {userNation.name.toUpperCase()}
+          </Text>
+
+          {/* Localized phrase */}
+          <View style={styles.s5PhraseShadow}>
+            <View style={styles.s5PhraseCard}>
+              <Text style={styles.s5PhraseLocal}>"{phrase.local}"</Text>
+              <View style={styles.s5PhraseDivider} />
+              <Text style={styles.s5PhraseEn}>"{phrase.en.toUpperCase()}"</Text>
+            </View>
+          </View>
+
+          {/* Pixel trophy */}
+          <View style={styles.s5TrophyShadow}>
+            <View style={styles.s5TrophyCard}>
+              <PixelTrophy size={3} />
+              <Text style={styles.s5TrophyLabel}>FIFA WORLD CUP™</Text>
+            </View>
+          </View>
+
+          {/* Stats strip */}
+          <View style={styles.s5StatsRow}>
+            <View style={styles.s5MiniStat}>
+              <Text style={styles.s5MiniStatValue}>{userStats.played}</Text>
+              <Text style={styles.s5MiniStatLabel}>PLAYED</Text>
+            </View>
+            <View style={styles.s5MiniStat}>
+              <Text style={styles.s5MiniStatValue}>{userStats.won}</Text>
+              <Text style={styles.s5MiniStatLabel}>WINS</Text>
+            </View>
+            <View style={styles.s5MiniStat}>
+              <Text style={styles.s5MiniStatValue}>{userStats.gf}</Text>
+              <Text style={styles.s5MiniStatLabel}>GOALS</Text>
+            </View>
+            <View style={styles.s5MiniStat}>
+              <Text style={[styles.s5MiniStatValue, { color: COLORS.gold }]}>★1</Text>
+              <Text style={styles.s5MiniStatLabel}>RANK</Text>
+            </View>
+          </View>
+
+          {/* CTAs */}
+          <TouchableOpacity
+            onPress={() => handleShare(userNation.id, userNation.name)}
+            activeOpacity={0.85}
+            style={styles.s5ShareWrap}
+          >
+            <LinearGradient
+              colors={[COLORS.gold, '#B98F1A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.s5ShareBtn}
+            >
+              <Text style={styles.s5ShareText}>📤  SHARE VICTORY</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={handleReset} activeOpacity={0.85} style={styles.s5MenuBtn}>
+            <Text style={styles.s5MenuText}>⌂ GO TO MAIN MENU</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCREEN 4 — ELIMINATED
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (isEliminated && userNation) {
+    const byTeam    = eliminatedBy ? NATIONS_BY_ID[eliminatedBy] : null;
+    const roundLabel = eliminatedAt === 'groups'
+      ? 'GROUP STAGE'
+      : ROUND_LABELS[eliminatedAt ?? ''] ?? (eliminatedAt ?? '').toUpperCase();
+    const userStats = computeUserStats(selectedNationId!, results, knockoutResults);
+    const gdiff = userStats.gf - userStats.ga;
+
+    // Final score string from last relevant match
+    let finalScoreLine: string | null = null;
+    if (byTeam && userLastKnockoutMatch?.result) {
+      const r = userLastKnockoutMatch.result;
+      const isHome = r.homeTeamId === selectedNationId;
+      const u = isHome ? r.homeScore : r.awayScore;
+      const o = isHome ? r.awayScore : r.homeScore;
+      finalScoreLine = `${userNation.code3} ${u} – ${o} ${byTeam.code3}`;
+    }
+
+    const bestMoment = computeBestMoment(selectedNationId!, results, knockoutResults);
+
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={StyleSheet.absoluteFill}>
+          <LinearGradient
+            colors={['rgba(194,52,11,0.18)', 'transparent']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 0.5 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+
+        <ScrollView contentContainerStyle={styles.s4Scroll} showsVerticalScrollIndicator={false}>
+          <TopBar title="CAMPAIGN OVER" subtitle="World Cup 2026" onBack={handleStartOver} />
+
+          {/* Sad tile */}
+          <View style={styles.s4SadWrap}>
+            <View style={styles.s4SadTile}>
+              <Text style={styles.s4SadEmoji}>😔</Text>
+            </View>
+          </View>
+
+          <Text style={styles.s4Title}>ELIMINATED</Text>
+
+          <View style={styles.s4RoundPillWrap}>
+            <View style={styles.s4RoundPill}>
+              <Text style={styles.s4RoundPillText}>
+                ✕ {roundLabel}{byTeam ? ` · vs ${byTeam.name.toUpperCase()}` : ''}
+              </Text>
+            </View>
+          </View>
+
+          {finalScoreLine && (
+            <Text style={styles.s4FinalScore}>
+              Final score <Text style={{ color: COLORS.textPrimary }}>{finalScoreLine}</Text>
+            </Text>
+          )}
+
+          {/* Stats */}
+          <View style={styles.s4StatsBlock}>
+            <SectionHeader icon="ball" title="YOUR CAMPAIGN" />
+            <View style={styles.s4StatsRow}>
+              <StatBlock label="Played" value={userStats.played} />
+              <StatBlock label="Wins" value={userStats.won} accent="#94C952" />
+              <StatBlock label="Draws" value={userStats.drawn} accent={COLORS.gold} />
+              <StatBlock label="Losses" value={userStats.lost} accent={COLORS.red} />
+            </View>
+            <View style={[styles.s4StatsRow, { marginTop: SPACING[8] }]}>
+              <StatBlock label="Goals For" value={userStats.gf} accent={COLORS.gold} />
+              <StatBlock label="Goals Against" value={userStats.ga} accent={COLORS.textSecondary} />
+              <StatBlock
+                label="Diff"
+                value={(gdiff >= 0 ? '+' : '') + gdiff}
+                accent={gdiff >= 0 ? '#94C952' : COLORS.red}
+              />
+            </View>
+          </View>
+
+          {/* Best moment */}
+          {bestMoment && (
+            <View style={styles.s4BestShadow}>
+              <View style={styles.s4BestCard}>
+                <View style={styles.s4BestIcon}>
+                  <PixelGlyph kind="star" color={COLORS.gold} px={2} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.s4BestLabel}>BEST MOMENT</Text>
+                  <Text style={styles.s4BestText}>
+                    <Text style={{ color: COLORS.gold, fontFamily: TYPOGRAPHY.fontHeading }}>
+                      {bestMoment.userCode} {bestMoment.userScore}–{bestMoment.oppScore} {bestMoment.oppCode}
+                    </Text>
+                    <Text> — {bestMoment.context}</Text>
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* CTAs */}
+          <View style={styles.s4Ctas}>
+            <TouchableOpacity activeOpacity={0.85} onPress={handleFinishTournament} style={styles.s4FinishWrap}>
+              <LinearGradient
+                colors={['#94C952', COLORS.green]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.s4FinishBtn}
+              >
+                <Text style={styles.s4FinishText}>
+                  ▶  FINISH TOURNAMENT
+                  <Text style={styles.s4FinishSub}>  (sim the rest)</Text>
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.85} onPress={handleReset} style={styles.s4MenuBtn}>
+              <Text style={styles.s4MenuText}>⌂ GO TO MAIN MENU</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCREEN 2 — GROUP PHASE
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (!inKnockoutPhase && userNation && userGroup) {
+    const allGroupFixtures = GROUP_FIXTURES.filter((f) => f.group === userGroup);
+    const playedCount = userGroupFixtures.filter((f) => f.id in results).length;
+
+    const placeholderRows =
+      groupStandings.length > 0
+        ? null
+        : allGroupFixtures
+            .map((f) => [f.homeTeamId, f.awayTeamId])
+            .flat()
+            .filter((id, idx, arr) => arr.indexOf(id) === idx);
+
+    return (
+      <SafeAreaView style={styles.root}>
+        <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+          <TopBar
+            title={`GROUP ${userGroup} · ${userNation.name.toUpperCase()}`}
+            subtitle="World Cup 2026 · Group Phase"
+            onBack={handleStartOver}
+            right={
+              <View style={styles.topBarFlagRight}>
+                <PixelFlag isoCode={userNation.isoCode} size={22} />
+              </View>
+            }
+          />
+
+          {/* Standings */}
+          <View style={{ paddingHorizontal: SPACING[16], paddingTop: SPACING[8] }}>
+            <SectionHeader
+              icon="shield"
+              title="STANDINGS"
+              right={
+                <Text style={styles.sectionRight}>
+                  {playedCount}/3 PLAYED
+                </Text>
+              }
+            />
+            <View style={styles.standingsShadow}>
+              <LinearGradient {...cardGreen} style={styles.standingsCard}>
+                <View style={styles.standHeaderRow}>
+                  <Text style={styles.standHPos}>#</Text>
+                  <Text style={styles.standHName}>TEAM</Text>
+                  <Text style={styles.standHStat}>P</Text>
+                  <Text style={styles.standHStat}>W</Text>
+                  <Text style={styles.standHStat}>D</Text>
+                  <Text style={styles.standHStat}>L</Text>
+                  <Text style={styles.standHStat}>GD</Text>
+                  <Text style={styles.standHPts}>PTS</Text>
+                </View>
+                {groupStandings.length > 0
+                  ? groupStandings.map((row, i) => (
+                      <StandingsRow
+                        key={row.teamId}
+                        row={row}
+                        pos={i + 1}
+                        isUser={row.teamId === selectedNationId}
+                        qualifies={i < 2}
+                        last={i === groupStandings.length - 1}
+                      />
+                    ))
+                  : (placeholderRows ?? []).map((teamId, i, arr) => {
+                      const t = NATIONS_BY_ID[teamId];
+                      return (
+                        <View key={teamId} style={[styles.standRow, i < arr.length - 1 && styles.standRowBorder]}>
+                          {i < 2 && <View style={styles.standQualBar} />}
+                          <Text style={[
+                            styles.standPos,
+                            i < 2 && { color: COLORS.green, fontWeight: '800' },
+                            teamId === selectedNationId && i >= 2 && { color: COLORS.gold },
+                          ]}>{i + 1}</Text>
+                          <View style={styles.standTeamCell}>
+                            {t && <PixelFlag isoCode={t.isoCode} size={16} />}
+                            <Text
+                              style={[styles.standName, teamId === selectedNationId && styles.standNameUser]}
+                              numberOfLines={1}
+                            >
+                              {t?.code3 ?? teamId.toUpperCase()}
+                            </Text>
+                            {teamId === selectedNationId && <Text style={styles.standMarker}>◂</Text>}
+                          </View>
+                          <Text style={styles.standStat}>0</Text>
+                          <Text style={styles.standStat}>0</Text>
+                          <Text style={styles.standStat}>0</Text>
+                          <Text style={styles.standStat}>0</Text>
+                          <Text style={styles.standStat}>0</Text>
+                          <Text style={styles.standPts}>0</Text>
+                        </View>
+                      );
+                    })}
+                <View style={styles.standLegend}>
+                  <View style={styles.standLegendDot} />
+                  <Text style={styles.standLegendText}>Top 2 advance to knockouts</Text>
+                </View>
+              </LinearGradient>
+            </View>
+          </View>
+
+          {/* Matches */}
+          <View style={{ paddingHorizontal: SPACING[16], paddingTop: SPACING[16] }}>
+            <SectionHeader icon="ball" title="YOUR MATCHES" />
+            <View style={{ gap: 10 }}>
+              {userGroupFixtures.map((fixture) => {
+                const homeTeam   = NATIONS_BY_ID[fixture.homeTeamId];
+                const awayTeam   = NATIONS_BY_ID[fixture.awayTeamId];
+                const result     = results[fixture.id] ?? null;
+                const isUserHome = fixture.homeTeamId === selectedNationId;
+                const isAnimating = justSimmedGroupId === fixture.id;
+                const md1Done = userGroupFixtures.filter((f) => f.matchday === 1 && f.id in results).length === 1;
+                const md2Done = userGroupFixtures.filter((f) => f.matchday === 2 && f.id in results).length === 1;
+                const isLocked = (fixture.matchday === 2 && !md1Done) || (fixture.matchday === 3 && !md2Done);
+                return (
+                  <GroupMatchCard
+                    key={fixture.id}
+                    fixture={fixture}
+                    homeTeam={homeTeam}
+                    awayTeam={awayTeam}
+                    result={result}
+                    isUserHome={isUserHome}
+                    isAnimating={isAnimating}
+                    selectedNationId={selectedNationId!}
+                    onQuickSim={() => handleSimulateGroupAnimated(fixture.id)}
+                    onLongSim={() => handleGroupLongSim(fixture.id)}
+                    onPenalties={() => handleGroupPenalties(fixture.id)}
+                    locked={isLocked}
+                  />
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Proceed card */}
+          {allUserGroupPlayed && (
+            <View style={{ paddingHorizontal: SPACING[16], paddingTop: SPACING[12] }}>
+              {qualificationStatus === 'qualified' && (
+                <View style={styles.proceedShadow}>
+                  <LinearGradient {...cardGreen} style={[styles.proceedCard, { borderColor: '#94C952' }]}>
+                    <View style={styles.proceedHeadRow}>
+                      <Text style={styles.proceedEmoji}>🏆</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.proceedTitle, { color: COLORS.gold }]}>GROUP COMPLETE</Text>
+                        <Text style={styles.proceedSub}>
+                          You finished <Text style={{ color: COLORS.gold }}>
+                            {userPosition === 1 ? '1st' : userPosition === 2 ? '2nd' : userPosition === 3 ? '3rd' : `${userPosition}th`} in Group {userGroup}
+                          </Text>. Advancing to the knockouts.
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity activeOpacity={0.85} onPress={() => { /* auto-advances via inKnockoutPhase */ }}>
+                      <LinearGradient
+                        colors={[COLORS.gold, '#B98F1A']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                        style={styles.proceedBtn}
+                      >
+                        <Text style={styles.proceedBtnText}>GO TO NEXT ROUND ▸</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </LinearGradient>
+                </View>
+              )}
+
+              {qualificationStatus === 'eliminated' && (
+                <View style={styles.proceedShadow}>
+                  <LinearGradient {...cardRed} style={[styles.proceedCard, { borderColor: COLORS.red }]}>
+                    <View style={styles.proceedHeadRow}>
+                      <Text style={styles.proceedEmoji}>😔</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.proceedTitle, { color: '#E86B47' }]}>ELIMINATED</Text>
+                        <Text style={styles.proceedSub}>
+                          Finished <Text style={{ color: '#E86B47' }}>
+                            {userPosition}
+                            {userPosition === 1 ? 'st' : userPosition === 2 ? 'nd' : userPosition === 3 ? 'rd' : 'th'}
+                            {' '}in Group {userGroup}
+                          </Text>. Campaign over.
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => setEliminated('groups', '')}
+                      style={styles.proceedRedBtn}
+                    >
+                      <Text style={styles.proceedRedBtnText}>GO TO MAIN MENU</Text>
+                    </TouchableOpacity>
+                  </LinearGradient>
+                </View>
+              )}
+
+              {qualificationStatus === 'pending' && (
+                <View style={styles.pendingBanner}>
+                  <Text style={styles.pendingEmoji}>⏳</Text>
+                  <Text style={styles.pendingText}>
+                    3rd place — awaiting results from other groups...
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </ScrollView>
+        {renderOverlays()}
+      </SafeAreaView>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCREEN 3 — KNOCKOUT
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (userNation) {
+    const nextMatch = userNextMatch;
+    const opponent  = nextMatch
+      ? NATIONS_BY_ID[
+          nextMatch.homeTeamId === selectedNationId
+            ? (nextMatch.awayTeamId ?? '')
+            : (nextMatch.homeTeamId ?? '')
+        ]
+      : null;
+
+    const roundLabel  = nextMatch ? (ROUND_LABELS[nextMatch.def.round] ?? nextMatch.def.round) : '';
+
+    const previousKos = resolvedBracket.filter(
+      (m) =>
+        m.result !== null &&
+        (m.result.homeTeamId === selectedNationId ||
+          m.result.awayTeamId === selectedNationId),
+    );
+
+    return (
+      <SafeAreaView style={styles.root}>
+        <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+          <TopBar
+            title="KNOCKOUTS"
+            subtitle={nextMatch ? `${roundLabel} · Your path to the final` : 'Your path to the final'}
+            onBack={handleStartOver}
+            right={
+              <View style={styles.topBarFlagRight}>
+                <PixelFlag isoCode={userNation.isoCode} size={22} />
+              </View>
+            }
+          />
+
+          {/* Sub-tabs */}
+          <View style={styles.koTabsWrap}>
+            <View style={styles.koTabsInner}>
+              {([
+                { id: 'tree',  label: 'TOURNAMENT TREE' },
+                { id: 'match', label: 'MY MATCH' },
+              ] as const).map((t) => {
+                const active = koTab === t.id;
+                if (active) {
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      onPress={() => setKoTab(t.id)}
+                      activeOpacity={0.85}
+                      style={{ flex: 1 }}
+                    >
+                      <LinearGradient
+                        colors={[COLORS.gold, '#B98F1A']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                        style={styles.koTabActive}
+                      >
+                        <Text style={styles.koTabActiveText}>{t.label}</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  );
+                }
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    onPress={() => setKoTab(t.id)}
+                    activeOpacity={0.7}
+                    style={styles.koTabInactive}
+                  >
+                    <Text style={styles.koTabInactiveText}>{t.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Tab content */}
+          {koTab === 'tree' ? (
+            <View style={{ paddingHorizontal: SPACING[8] }}>
+              <KnockoutBracket resolved={resolvedBracket} />
+            </View>
+          ) : (
+            <View style={{ paddingHorizontal: SPACING[16] }}>
+              {nextMatch && opponent ? (
+                <View style={styles.koMatchShadow}>
+                  <LinearGradient {...cardGreen} style={styles.koMatchCard}>
+                    <View style={styles.koMatchHeadRow}>
+                      <View style={styles.koRoundBadge}>
+                        <Text style={styles.koRoundBadgeText}>{roundLabel}</Text>
+                      </View>
+                      <Text style={styles.koMatchDate}>{nextMatch.def.date}</Text>
+                    </View>
+
+                    <View style={styles.koMatchTeamsRow}>
+                      <View style={styles.koTeamSide}>
+                        <View style={[styles.koTeamFlagWrap, { borderColor: COLORS.gold }]}>
+                          <PixelFlag isoCode={userNation.isoCode} size={44} />
+                        </View>
+                        <Text style={[styles.koTeamName, { color: COLORS.gold }]} numberOfLines={1}>
+                          {userNation.name.toUpperCase()}
+                        </Text>
+                        <DifficultyDots strength={userNation.strength} dotSize={4} />
+                      </View>
+                      <Text style={styles.koVs}>VS</Text>
+                      <View style={styles.koTeamSide}>
+                        <View style={[styles.koTeamFlagWrap, { borderColor: COLORS.border }]}>
+                          <PixelFlag isoCode={opponent.isoCode} size={44} />
+                        </View>
+                        <Text style={styles.koTeamName} numberOfLines={1}>
+                          {opponent.name.toUpperCase()}
+                        </Text>
+                        <DifficultyDots strength={opponent.strength} dotSize={4} />
+                      </View>
+                    </View>
+
+                    <View style={styles.koVenueRow}>
+                      <PixelGlyph kind="flag" color={COLORS.teal} px={2} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.koVenueName} numberOfLines={1}>
+                          {nextMatch.def.venue.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.koBtnsRow}>
+                      <TouchableOpacity
+                        style={styles.simBtnOutline}
+                        onPress={handleKnockoutLongSim}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.simBtnOutlineText}>LONG SIM</Text>
+                        <Text style={styles.simBtnSub}>Watch 90'</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.simBtnGold}
+                        onPress={handleSimulateKnockout}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.simBtnGoldText}>QUICK SIM</Text>
+                        <Text style={[styles.simBtnSub, { color: 'rgba(11,23,31,0.7)' }]}>Instant</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.simBtnTeal}
+                        onPress={handleKnockoutPenalties}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.simBtnTealText}>PENALTIES</Text>
+                        <Text style={[styles.simBtnSub, { color: COLORS.teal }]}>Direct</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </LinearGradient>
+                </View>
+              ) : (
+                <View style={styles.waitingCard}>
+                  <Text style={styles.waitingEmoji}>⏳</Text>
+                  <Text style={styles.waitingText}>Waiting for bracket to resolve...</Text>
+                  <Text style={styles.waitingHint}>
+                    Other group results determine your next opponent.
+                  </Text>
+                </View>
+              )}
+
+              {previousKos.length > 0 && (
+                <View style={{ marginTop: SPACING[16] }}>
+                  <SectionHeader icon="star" title="PREVIOUS KNOCKOUTS" />
+                  <View style={{ gap: 8 }}>
+                    {previousKos.map((m) => {
+                      const r = m.result!;
+                      const isHome = r.homeTeamId === selectedNationId;
+                      const uScore = isHome ? r.homeScore : r.awayScore;
+                      const oScore = isHome ? r.awayScore : r.homeScore;
+                      const oppId  = isHome ? r.awayTeamId : r.homeTeamId;
+                      const opp    = NATIONS_BY_ID[oppId];
+                      const won    = uScore > oScore;
+                      return (
+                        <View key={m.def.id} style={styles.prevKoShadow}>
+                          <View style={styles.prevKoCard}>
+                            <View style={styles.prevKoHead}>
+                              <View style={styles.prevKoRoundBadge}>
+                                <Text style={styles.prevKoRoundText}>
+                                  {ROUND_LABELS[m.def.round] ?? m.def.round}
+                                </Text>
+                              </View>
+                              <View style={styles.prevKoTeamRow}>
+                                <PixelFlag isoCode={userNation.isoCode} size={16} />
+                                <Text style={styles.prevKoUserCode}>{userNation.code3}</Text>
+                                <View style={styles.prevKoScoreBox}>
+                                  <Text style={styles.prevKoScoreText}>{uScore}–{oScore}</Text>
+                                </View>
+                                <Text style={styles.prevKoOppCode}>{opp?.code3 ?? '?'}</Text>
+                                {opp && <PixelFlag isoCode={opp.isoCode} size={16} />}
+                              </View>
+                              <Text style={[styles.prevKoBadge, { color: won ? '#94C952' : COLORS.red }]}>
+                                {won ? 'WIN' : 'LOSS'}
+                              </Text>
+                            </View>
+                            <View style={styles.prevKoFoot}>
+                              <Text style={styles.prevKoFootText} numberOfLines={1}>{m.def.venue}</Text>
+                              <Text style={styles.prevKoFootText}>{m.def.date}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+        </ScrollView>
+        {renderOverlays()}
+      </SafeAreaView>
+    );
+  }
+
+  // Fallback
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.waitingCard}>
@@ -1362,7 +1854,7 @@ export default function TournamentScreen({ navigation }: Props) {
   );
 }
 
-// ─── Helper: aggregate user's stats from all matches ─────────────────────────
+// ─── Aggregate user's stats from all matches ────────────────────────────────
 function computeUserStats(
   nationId: string,
   results: Record<string, import('../types/matchResult').MatchResult>,
@@ -1392,751 +1884,1344 @@ function computeUserStats(
   return { played, won, drawn, lost, gf, ga };
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  root:       { flex: 1, backgroundColor: COLORS.bgPrimary },
-  scroll:     { padding: SPACING.md, paddingBottom: SPACING.xl },
-  idleScroll: { padding: SPACING.md, paddingBottom: 40 },
+// ─── Best moment: user's win with largest GD (prefer knockout over group) ──
+function computeBestMoment(
+  nationId: string,
+  results: Record<string, import('../types/matchResult').MatchResult>,
+  knockoutResults: Record<number, import('../types/knockout').KnockoutResult>,
+): { userCode: string; oppCode: string; userScore: number; oppScore: number; context: string } | null {
+  const userNation = NATIONS_BY_ID[nationId];
+  if (!userNation) return null;
 
-  // ── IDLE ──
-  journeyTitle: {
-    fontFamily: FONTS.heading,
-    fontSize: 32,
-    color: COLORS.accent,
-    textAlign: 'center',
-    letterSpacing: 3,
-    marginTop: SPACING.sm,
+  type Candidate = { userScore: number; oppScore: number; oppId: string; context: string; weight: number };
+  const candidates: Candidate[] = [];
+
+  Object.values(knockoutResults).forEach((r) => {
+    if (r.homeTeamId !== nationId && r.awayTeamId !== nationId) return;
+    const isHome = r.homeTeamId === nationId;
+    const u = isHome ? r.homeScore : r.awayScore;
+    const o = isHome ? r.awayScore : r.homeScore;
+    if (u <= o) return;
+    const oppId = isHome ? r.awayTeamId : r.homeTeamId;
+    candidates.push({ userScore: u, oppScore: o, oppId, context: 'knockout win', weight: 100 + (u - o) });
+  });
+
+  Object.values(results).forEach((r) => {
+    if (r.homeTeamId !== nationId && r.awayTeamId !== nationId) return;
+    const isHome = r.homeTeamId === nationId;
+    const u = isHome ? r.homeScore : r.awayScore;
+    const o = isHome ? r.awayScore : r.homeScore;
+    if (u <= o) return;
+    const oppId = isHome ? r.awayTeamId : r.homeTeamId;
+    candidates.push({ userScore: u, oppScore: o, oppId, context: 'group stage win', weight: u - o });
+  });
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.weight - a.weight);
+  const best = candidates[0];
+  const opp = NATIONS_BY_ID[best.oppId];
+  return {
+    userCode: userNation.code3,
+    oppCode: opp?.code3 ?? best.oppId.toUpperCase(),
+    userScore: best.userScore,
+    oppScore: best.oppScore,
+    context: best.context,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Styles
+// ═══════════════════════════════════════════════════════════════════════════════
+const styles = StyleSheet.create({
+  root:      { flex: 1, backgroundColor: COLORS.background },
+  scrollPad: { paddingBottom: SPACING[32] },
+
+  // ── Top bar ────────────────────────────────────────────────────────────────
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING[12],
+    paddingHorizontal: SPACING[16],
+    paddingTop: SPACING[8],
+    paddingBottom: SPACING[8],
   },
-  journeyTitle2: {
-    fontFamily: FONTS.heading,
-    fontSize: 32,
-    color: COLORS.accent,
-    textAlign: 'center',
-    letterSpacing: 3,
-    marginBottom: 4,
-  },
-  journeySubtitle: {
-    fontFamily: FONTS.body,
-    fontSize: 13,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginBottom: SPACING.md,
-  },
-  nationGrid: { gap: 2 },
-  nationTile: {
-    flex: 1,
-    margin: 2,
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.sm,
+  topBarBack: {
+    width: 34,
+    height: 34,
+    borderRadius: RADIUS.small,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 2,
-    minWidth: (SCREEN_W - 32) / 4 - 4,
-    maxWidth: (SCREEN_W - 32) / 4 - 4,
+    justifyContent: 'center',
+    ...PIXEL_SHADOW,
   },
-  nationTileSelected: {
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    backgroundColor: `${COLORS.primary}28`,
+  topBarTitle: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 22,
+    color: COLORS.gold,
+    letterSpacing: 1.5,
+    lineHeight: 24,
   },
-  nationTileFlag:    { fontSize: 22, marginBottom: 2 },
-  nationTileName: {
-    fontFamily: FONTS.body,
-    fontSize: 8,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-  },
-  nationTileNameSel: {
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.accent,
-  },
-
-  selectedCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.lg,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    padding: SPACING.md,
-    marginTop: SPACING.md,
-    gap: SPACING.md,
-  },
-  selectedCardFlag: { fontSize: 48 },
-  selectedCardInfo: { flex: 1 },
-  selectedCardName: {
-    fontFamily: FONTS.heading,
-    fontSize: 20,
-    color: COLORS.textPrimary,
-  },
-  selectedCardGroup: {
-    fontFamily: FONTS.body,
-    fontSize: 13,
+  topBarSub: {
+    marginTop: 2,
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 11,
     color: COLORS.textSecondary,
   },
-  selectedCardElo: {
-    fontFamily: FONTS.body,
-    fontSize: 11,
+  topBarFlagRight: {
+    width: 34,
+    height: 34,
+    borderRadius: RADIUS.small,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ── Section header ────────────────────────────────────────────────────────
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 4,
+    marginBottom: 10,
+  },
+  sectionHeaderTitle: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 13,
+    color: COLORS.gold,
+    letterSpacing: 2,
+  },
+  sectionHeaderRule: {
+    flex: 1,
+    height: 2,
+    marginLeft: 4,
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.border,
+    borderStyle: 'dashed',
+  },
+  sectionRight: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    letterSpacing: 1,
+  },
+
+  // ── Screen 1 — Team Select ────────────────────────────────────────────────
+  s1Header: {
+    paddingHorizontal: SPACING[16],
+    paddingTop: SPACING[16],
+    paddingBottom: SPACING[8],
+  },
+  s1Eyebrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  s1EyebrowText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    color: COLORS.gold,
+    letterSpacing: 3,
+  },
+  s1Title: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 32,
+    color: COLORS.textPrimary,
+    letterSpacing: 1.5,
+    lineHeight: 34,
+  },
+  s1Subtitle: {
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 6,
+  },
+  s1SearchWrap: {
+    paddingHorizontal: SPACING[16],
+    paddingVertical: SPACING[8],
+  },
+  s1SearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.small,
+  },
+  s1SearchInput: {
+    flex: 1,
+    padding: 0,
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 12,
+    color: COLORS.textPrimary,
+  },
+  s1SearchCount: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
     color: COLORS.textMuted,
+    letterSpacing: 1.5,
+  },
+  s1GridContent: {
+    paddingHorizontal: SPACING[16],
+    paddingTop: SPACING[4],
+    paddingBottom: 260,
+    gap: 8,
+  },
+  s1NationCard: {
+    position: 'relative',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.small,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    gap: 5,
+    ...PIXEL_SHADOW,
+  },
+  s1NationCardSel: {
+    backgroundColor: COLORS.surfaceElevated,
+    borderColor: COLORS.gold,
+  },
+  s1CheckBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    backgroundColor: COLORS.gold,
+    borderWidth: 1,
+    borderColor: '#B98F1A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  s1NationFlagWrap: {
+    width: 40,
+    height: 30,
+    borderRadius: 3,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  s1NationCode: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 12,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
+    lineHeight: 12,
+  },
+  s1NationGroup: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 8,
+    color: COLORS.textMuted,
+    letterSpacing: 1,
+    lineHeight: 10,
+  },
+  s1EmptyText: {
+    paddingVertical: SPACING[20],
+    textAlign: 'center',
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  s1BottomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: SPACING[16],
+    paddingTop: SPACING[20],
+    paddingBottom: SPACING[16],
+    backgroundColor: COLORS.background,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  s1SelectedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: RADIUS.small,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+    marginBottom: 10,
+    ...PIXEL_SHADOW,
+  },
+  s1SelectedFlag: {
+    width: 40,
+    height: 30,
+    borderRadius: 3,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: '#B98F1A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  s1SelectedLabel: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 9,
+    color: '#B98F1A',
+    letterSpacing: 2,
+  },
+  s1SelectedName: {
     marginTop: 2,
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
   },
-  eloBarWrap:  { gap: 2, width: '100%' },
-  eloBarTrack: {
-    height: 4,
-    backgroundColor: COLORS.border,
-    borderRadius: 2,
-    overflow: 'hidden',
-    width: '100%',
+  s1CtaWrap: {
+    borderRadius: RADIUS.small,
+    ...PIXEL_SHADOW,
   },
-  eloBarFill:  { height: '100%', borderRadius: 2 },
-  eloBarLabel: {
-    fontFamily: FONTS.body,
+  s1Cta: {
+    paddingVertical: 14,
+    borderRadius: RADIUS.small,
+    borderWidth: 1,
+    borderColor: '#B98F1A',
+    alignItems: 'center',
+  },
+  s1CtaText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 16,
+    color: COLORS.background,
+    letterSpacing: 2.5,
+    fontWeight: '800',
+  },
+
+  // ── Screen 2 — Standings card ────────────────────────────────────────────
+  standingsShadow: {
+    borderRadius: RADIUS.small,
+    ...PIXEL_SHADOW,
+  },
+  standingsCard: {
+    borderRadius: RADIUS.small,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 10,
+    paddingHorizontal: SPACING[16],
+  },
+  standHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  standHPos: {
+    width: 16,
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 9,
+    color: COLORS.textMuted,
+    letterSpacing: 1,
+  },
+  standHName: {
+    flex: 1,
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 9,
+    color: COLORS.textMuted,
+    letterSpacing: 1.5,
+  },
+  standHStat: {
+    width: 22,
+    textAlign: 'center',
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 9,
+    color: COLORS.textMuted,
+    letterSpacing: 1,
+  },
+  standHPts: {
+    width: 30,
+    textAlign: 'right',
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 9,
+    color: COLORS.textMuted,
+    letterSpacing: 1,
+  },
+  standRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    position: 'relative',
+  },
+  standRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(30,52,72,0.35)',
+    borderStyle: 'dashed',
+  },
+  standQualBar: {
+    position: 'absolute',
+    left: -SPACING[8] - 4,
+    top: 6,
+    bottom: 6,
+    width: 3,
+    backgroundColor: '#94C952',
+  },
+  standPos: {
+    width: 16,
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  standTeamCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 0,
+  },
+  standName: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    letterSpacing: 0.5,
+  },
+  standNameUser: {
+    color: COLORS.gold,
+    fontWeight: '800',
+  },
+  standMarker: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    color: '#B98F1A',
+    marginLeft: 2,
+  },
+  standStat: {
+    width: 22,
+    textAlign: 'center',
+    fontFamily: TYPOGRAPHY.fontMono,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  standPts: {
+    width: 30,
+    textAlign: 'right',
+    fontFamily: TYPOGRAPHY.fontMono,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    fontWeight: '800',
+  },
+  standLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  standLegendDot: {
+    width: 3,
+    height: 10,
+    backgroundColor: '#94C952',
+  },
+  standLegendText: {
+    fontFamily: TYPOGRAPHY.fontBody,
     fontSize: 10,
     color: COLORS.textMuted,
   },
 
-  beginBtn: {
-    marginTop: SPACING.lg,
-    backgroundColor: COLORS.accent,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    alignItems: 'center',
-  },
-  beginBtnDisabled: { backgroundColor: COLORS.bgSurface, opacity: 0.5 },
-  beginBtnText: {
-    fontFamily: FONTS.heading,
-    fontSize: 18,
-    color: COLORS.bgPrimary,
-    letterSpacing: 1,
-  },
-
-  // ── GROUP ──
-  groupHeader: {
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  groupLabel: {
-    fontFamily: FONTS.heading,
-    fontSize: 28,
-    color: COLORS.accent,
-    letterSpacing: 3,
-  },
-  groupNationBadge: {
-    fontFamily: FONTS.body,
-    fontSize: 15,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-
-  tableCard: {
-    backgroundColor: COLORS.bgSurface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-    marginBottom: SPACING.md,
-  },
-  tableHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.bgCardAlt,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  tableHPos:  {
-    width: 20,
-    fontFamily: FONTS.headingMedium,
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  tableHName: {
-    flex: 1,
-    fontFamily: FONTS.headingMedium,
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  tableHStat: {
-    width: 26,
-    fontFamily: FONTS.headingMedium,
-    fontSize: 11,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-  },
-  tableHPts: {
-    width: 30,
-    fontFamily: FONTS.headingMedium,
-    fontSize: 11,
-    color: COLORS.accent,
-    textAlign: 'center',
-  },
-
-  standRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 7,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  standRowUser: { backgroundColor: `${COLORS.primary}20` },
-  standPos:     {
-    width: 20,
-    fontFamily: FONTS.body,
-    fontSize: 11,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-  },
-  standFlag:     { fontSize: 16, marginRight: 4 },
-  standName: {
-    flex: 1,
-    fontFamily: FONTS.body,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  standNameUser: {
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.accent,
-  },
-  standStat: {
-    width: 26,
-    fontFamily: FONTS.body,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  standPts: {
-    width: 30,
-    fontFamily: FONTS.bodyBold,
-    fontSize: 11,
-    color: COLORS.accent,
-    textAlign: 'center',
-  },
-
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
-  },
-  progressText: {
-    fontFamily: FONTS.body,
-    fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  sectionTitle: {
-    fontFamily: FONTS.heading,
-    fontSize: 13,
-    color: COLORS.accent,
-    letterSpacing: 2,
+  // ── Screen 2 — Match card ────────────────────────────────────────────────
+  matchShadow: {
+    borderRadius: RADIUS.small,
+    ...PIXEL_SHADOW,
   },
   matchCard: {
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.small,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: SPACING.sm,
     overflow: 'hidden',
   },
   matchCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.bgSurface,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 5,
-    gap: SPACING.sm,
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
-  matchMD: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 11,
-    color: COLORS.accent,
+  mdBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: COLORS.gold,
+    borderRadius: 2,
   },
-  matchDate: {
-    fontFamily: FONTS.body,
-    fontSize: 11,
-    color: COLORS.textMuted,
+  mdBadgeText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    color: COLORS.background,
+    letterSpacing: 1.5,
+    fontWeight: '800',
   },
   matchVenue: {
-    flex: 1,
-    fontFamily: FONTS.body,
-    fontSize: 9,
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 10,
     color: COLORS.textMuted,
-    textAlign: 'right',
+    maxWidth: 180,
   },
-  matchTeams:     { flexDirection: 'row', alignItems: 'center', padding: SPACING.sm },
-  matchTeamSide:  { flex: 1, alignItems: 'center', gap: 2 },
-  matchTeamRight: { alignItems: 'center' },
-  matchTeamFlag:  { fontSize: 26 },
+  matchDate: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    color: COLORS.teal,
+    letterSpacing: 1.5,
+  },
+  resultPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 2,
+    borderWidth: 1,
+  },
+  resultPillText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    letterSpacing: 2,
+    fontWeight: '800',
+  },
+  matchTeamsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  matchTeamSide: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
   matchTeamName: {
-    fontFamily: FONTS.body,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    letterSpacing: 0.5,
   },
   matchTeamNameUser: {
-    fontFamily: FONTS.bodyBold,
-    color: COLORS.accent,
+    color: COLORS.gold,
+    fontWeight: '800',
   },
-  matchScoreBox: { width: 70, alignItems: 'center' },
+  matchScoreBox: {
+    minWidth: 64,
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 4,
+  },
   matchScore: {
-    fontFamily: FONTS.pixel,
-    fontSize: 18,
-    color: COLORS.accent,
+    fontFamily: TYPOGRAPHY.fontMono,
+    fontSize: 22,
+    color: COLORS.gold,
     letterSpacing: 2,
+    lineHeight: 22,
+  },
+  matchScoreDash: {
+    color: COLORS.textMuted,
+    fontSize: 16,
   },
   matchVs: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 13,
-    color: COLORS.textMuted,
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
+    fontWeight: '800',
   },
   matchBtns: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
   },
-  longSimBtn: {
+  simBtnOutline: {
     flex: 1,
-    padding: SPACING.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 5,
     alignItems: 'center',
-    borderRightWidth: 1,
-    borderRightColor: COLORS.border,
-    backgroundColor: COLORS.bgSurface,
+    gap: 2,
+    ...PIXEL_SHADOW,
   },
-  longSimBtnText: {
-    fontFamily: FONTS.bodyBold,
+  simBtnOutlineText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
     fontSize: 11,
-    color: COLORS.textMuted,
-  },
-  simBtn: {
-    flex: 1,
-    padding: SPACING.sm,
-    alignItems: 'center',
-    borderRightWidth: 1,
-    borderRightColor: COLORS.border,
-    backgroundColor: COLORS.bgSurface,
-  },
-  simBtnText: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 11,
-    color: COLORS.warning,
-  },
-  playBtn: {
-    flex: 1,
-    padding: SPACING.sm,
-    alignItems: 'center',
-    backgroundColor: `${COLORS.accentTeal}18`,
-  },
-  playBtnText: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 11,
-    color: COLORS.accentTeal,
-  },
-
-  matchResultRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.sm,
-    paddingBottom: SPACING.xs,
-  },
-  matchResultText: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 13,
+    color: COLORS.textPrimary,
     letterSpacing: 1,
+    fontWeight: '800',
   },
-  resetMatchText: {
-    fontFamily: FONTS.bodyBold,
+  simBtnGold: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    backgroundColor: COLORS.gold,
+    borderWidth: 1,
+    borderColor: '#B98F1A',
+    borderRadius: 5,
+    alignItems: 'center',
+    gap: 2,
+    ...PIXEL_SHADOW,
+  },
+  simBtnGoldText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
     fontSize: 11,
+    color: COLORS.background,
+    letterSpacing: 1,
+    fontWeight: '800',
+  },
+  simBtnTeal: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.teal,
+    borderRadius: 5,
+    alignItems: 'center',
+    gap: 2,
+    ...PIXEL_SHADOW,
+  },
+  simBtnTealText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 11,
+    color: COLORS.teal,
+    letterSpacing: 1,
+    fontWeight: '800',
+  },
+  simBtnSub: {
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 9,
     color: COLORS.textMuted,
   },
   matchLockedRow: {
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
+    paddingVertical: 10,
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    backgroundColor: COLORS.bgSurface,
   },
   matchLockedText: {
-    fontFamily: FONTS.body,
+    fontFamily: TYPOGRAPHY.fontBody,
     fontSize: 11,
     color: COLORS.textMuted,
   },
 
-  qualBanner: {
+  // ── Screen 2 — Proceed card ──────────────────────────────────────────────
+  proceedShadow: {
+    borderRadius: RADIUS.medium,
+    marginTop: SPACING[8],
+    ...PIXEL_SHADOW,
+  },
+  proceedCard: {
+    borderRadius: RADIUS.medium,
+    borderWidth: 1,
+    padding: 14,
+  },
+  proceedHeadRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
-    borderRadius: RADIUS.md,
-    padding: SPACING.sm,
-    marginTop: SPACING.sm,
-    borderWidth: 1,
+    gap: 10,
+    marginBottom: 12,
   },
-  qualBannerGreen:  { backgroundColor: `${COLORS.success}22`, borderColor: COLORS.success },
-  qualBannerRed:    { backgroundColor: `${COLORS.danger}22`,  borderColor: COLORS.danger  },
-  qualBannerYellow: { backgroundColor: `${COLORS.warning}22`, borderColor: COLORS.warning  },
-  qualEmoji: { fontSize: 22 },
-  qualText: {
-    flex: 1,
-    fontFamily: FONTS.bodyMedium,
+  proceedEmoji: { fontSize: 24 },
+  proceedTitle: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 16,
+    letterSpacing: 1.5,
+    fontWeight: '800',
+  },
+  proceedSub: {
+    marginTop: 4,
+    fontFamily: TYPOGRAPHY.fontBody,
     fontSize: 11,
+    color: 'rgba(240,244,247,0.85)',
+    lineHeight: 14,
+  },
+  proceedBtn: {
+    paddingVertical: 13,
+    borderRadius: RADIUS.small,
+    borderWidth: 1,
+    borderColor: '#B98F1A',
+    alignItems: 'center',
+  },
+  proceedBtnText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 14,
+    color: COLORS.background,
+    letterSpacing: 2.5,
+    fontWeight: '800',
+  },
+  proceedRedBtn: {
+    paddingVertical: 12,
+    borderRadius: RADIUS.small,
+    borderWidth: 1,
+    borderColor: '#6A1A05',
+    backgroundColor: COLORS.red,
+    alignItems: 'center',
+  },
+  proceedRedBtnText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    letterSpacing: 2,
+    fontWeight: '800',
+  },
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    marginTop: SPACING[8],
+    borderRadius: RADIUS.small,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+    backgroundColor: 'rgba(250,206,67,0.08)',
+  },
+  pendingEmoji: { fontSize: 20 },
+  pendingText: {
+    flex: 1,
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 12,
     color: COLORS.textPrimary,
   },
 
-  advanceBtn: {
-    marginTop: SPACING.md,
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
+  // ── Screen 3 — KO tabs ──────────────────────────────────────────────────
+  koTabsWrap: {
+    paddingHorizontal: SPACING[16],
+    paddingTop: SPACING[4],
+    paddingBottom: SPACING[12],
+  },
+  koTabsInner: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.medium,
+  },
+  koTabActive: {
+    paddingVertical: 9,
+    borderRadius: RADIUS.small,
+    borderWidth: 1,
+    borderColor: '#B98F1A',
     alignItems: 'center',
   },
-  advanceBtnText: {
-    fontFamily: FONTS.heading,
-    fontSize: 18,
+  koTabActiveText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 11,
+    color: COLORS.background,
+    letterSpacing: 1.5,
+    fontWeight: '800',
+  },
+  koTabInactive: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  koTabInactiveText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.5,
+  },
+
+  // ── Screen 3 — KO match card ────────────────────────────────────────────
+  koMatchShadow: {
+    borderRadius: RADIUS.medium,
+    marginBottom: SPACING[4],
+    ...PIXEL_SHADOW,
+  },
+  koMatchCard: {
+    borderRadius: RADIUS.medium,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+    padding: 14,
+  },
+  koMatchHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  koRoundBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    backgroundColor: COLORS.gold,
+    borderRadius: 3,
+  },
+  koRoundBadgeText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    color: COLORS.background,
+    letterSpacing: 1.5,
+    fontWeight: '800',
+  },
+  koMatchDate: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    letterSpacing: 1,
+  },
+  koMatchTeamsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 14,
+  },
+  koTeamSide: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+  },
+  koTeamFlagWrap: {
+    width: 60,
+    height: 46,
+    borderRadius: 5,
+    backgroundColor: COLORS.background,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  koTeamName: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
+    textAlign: 'center',
+    fontWeight: '800',
+  },
+  koVs: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 20,
+    color: COLORS.textSecondary,
+    letterSpacing: 3,
+    fontWeight: '800',
+  },
+  koVenueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 5,
+    marginBottom: 12,
+  },
+  koVenueName: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 11,
     color: COLORS.textPrimary,
     letterSpacing: 1,
   },
-
-  // ── KNOCKOUT ──
-  koHeader: { alignItems: 'center', marginBottom: SPACING.sm },
-  koNationBadge: {
-    fontFamily: FONTS.heading,
-    fontSize: 20,
-    color: COLORS.accent,
-  },
-  koWinCount: {
-    fontFamily: FONTS.body,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+  koBtnsRow: {
+    flexDirection: 'row',
+    gap: 6,
   },
 
-  roundBadge: {
-    alignSelf: 'center',
-    backgroundColor: COLORS.primary,
-    borderRadius: 20,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 4,
-    marginBottom: SPACING.sm,
+  // ── Screen 3 — Previous knockouts ────────────────────────────────────────
+  prevKoShadow: {
+    borderRadius: RADIUS.small,
+    ...PIXEL_SHADOW,
   },
-  roundBadgeText: {
-    fontFamily: FONTS.heading,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    letterSpacing: 2,
-  },
-
-  koMatchCard: {
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.lg,
+  prevKoCard: {
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
+    borderRadius: RADIUS.small,
+    overflow: 'hidden',
   },
-  koMatchDate: {
-    fontFamily: FONTS.body,
-    fontSize: 11,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginBottom: SPACING.sm,
-  },
-
-  koMatchTeams: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
-  koTeamSide:   { flex: 1, alignItems: 'center', gap: 4 },
-  koTeamRight:  { alignItems: 'center' },
-  koTeamFlag:   { fontSize: 40 },
-  koTeamName: {
-    fontFamily: FONTS.body,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  koVs: {
-    width: 40,
-    textAlign: 'center',
-    fontFamily: FONTS.bodyBold,
-    fontSize: 15,
-    color: COLORS.textMuted,
-  },
-
-  matchupBadge: {
-    backgroundColor: `${COLORS.success}22`,
-    borderRadius: RADIUS.sm,
-    padding: SPACING.xs,
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.success,
-  },
-  matchupBadgeUnderdog: {
-    backgroundColor: `${COLORS.warning}22`,
-    borderColor: COLORS.warning,
-  },
-  matchupBadgeText: {
-    fontFamily: FONTS.bodyMedium,
-    fontSize: 11,
-    color: COLORS.textPrimary,
-  },
-
-  koBtns: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.xs },
-  koSimBtn: {
-    flex: 1,
-    backgroundColor: COLORS.bgSurface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.sm,
-    alignItems: 'center',
-  },
-  koSimBtnText: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  koPenBtn: {
-    flex: 1,
-    backgroundColor: COLORS.accentTeal,
-    borderRadius: RADIUS.md,
-    padding: SPACING.sm,
-    alignItems: 'center',
-  },
-  koPenBtnText: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 11,
-    color: COLORS.bgPrimary,
-  },
-
-  prevResultRow: {
+  prevKoHead: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.sm,
-    marginBottom: 6,
-    gap: SPACING.sm,
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
-  prevResultRound: {
-    flex: 1,
-    fontFamily: FONTS.body,
-    fontSize: 11,
-    color: COLORS.textMuted,
+  prevKoRoundBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
   },
-  prevResultScore: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 13,
-    minWidth: 50,
-    textAlign: 'center',
-  },
-  prevResultOpp: {
-    flex: 1,
-    fontFamily: FONTS.body,
-    fontSize: 11,
+  prevKoRoundText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 9,
     color: COLORS.textSecondary,
-    textAlign: 'right',
+    letterSpacing: 1.5,
+  },
+  prevKoTeamRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  prevKoUserCode: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 12,
+    color: COLORS.gold,
+    fontWeight: '800',
+  },
+  prevKoScoreBox: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: COLORS.background,
+    borderRadius: 3,
+  },
+  prevKoScoreText: {
+    fontFamily: TYPOGRAPHY.fontMono,
+    fontSize: 16,
+    color: COLORS.gold,
+    letterSpacing: 1,
+  },
+  prevKoOppCode: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 12,
+    color: COLORS.textPrimary,
+  },
+  prevKoBadge: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    letterSpacing: 2,
+    fontWeight: '800',
+  },
+  prevKoFoot: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    borderStyle: 'dashed',
+  },
+  prevKoFootText: {
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 10,
+    color: COLORS.textMuted,
+    flexShrink: 1,
   },
 
+  // ── Waiting card (KO fallback) ───────────────────────────────────────────
   waitingCard: {
-    backgroundColor: COLORS.bgSurface,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.medium,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING[20],
     alignItems: 'center',
-    marginTop: SPACING.xl,
+    marginTop: SPACING[20],
+    ...PIXEL_SHADOW,
   },
-  waitingEmoji: { fontSize: 40, marginBottom: SPACING.sm },
+  waitingEmoji: { fontSize: 40, marginBottom: 8 },
   waitingText: {
-    fontFamily: FONTS.bodyMedium,
+    fontFamily: TYPOGRAPHY.fontHeading,
     fontSize: 15,
-    color: COLORS.textSecondary,
+    color: COLORS.textPrimary,
+    letterSpacing: 1.5,
     textAlign: 'center',
   },
   waitingHint: {
-    fontFamily: FONTS.body,
+    marginTop: 6,
+    fontFamily: TYPOGRAPHY.fontBody,
     fontSize: 11,
     color: COLORS.textMuted,
     textAlign: 'center',
-    marginTop: SPACING.xs,
   },
 
-  // ── WINNER ──
-  winnerRoot:  { backgroundColor: '#060F0A' },
-  winnerScroll: { padding: SPACING.md, alignItems: 'center', paddingBottom: 60 },
-  winnerTrophy: { fontSize: 80, textAlign: 'center', marginTop: SPACING.lg },
-  winnerFlagRow: { alignItems: 'center', marginVertical: SPACING.sm },
-  shareBtn: {
-    backgroundColor: COLORS.accentTeal,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.xl,
+  // ── Screen 4 — Eliminated ────────────────────────────────────────────────
+  s4Scroll: {
+    paddingBottom: SPACING[32],
+  },
+  s4SadWrap: {
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginTop: SPACING[8],
   },
-  shareBtnText: {
-    fontFamily: FONTS.heading,
-    fontSize: 15,
-    color: COLORS.bgPrimary,
-    letterSpacing: 1,
+  s4SadTile: {
+    width: 98,
+    height: 98,
+    borderRadius: 10,
+    backgroundColor: '#3B1A0D',
+    borderWidth: 2,
+    borderColor: COLORS.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...PIXEL_SHADOW,
   },
-  winnerTitle: {
-    fontFamily: FONTS.heading,
-    fontSize: 36,
-    color: COLORS.accent,
-    letterSpacing: 4,
-    marginTop: SPACING.sm,
-  },
-  winnerTitle2: {
-    fontFamily: FONTS.heading,
-    fontSize: 36,
-    color: COLORS.accent,
-    letterSpacing: 4,
-  },
-  winnerNation: {
-    fontFamily: FONTS.heading,
-    fontSize: 24,
-    color: COLORS.textPrimary,
-    marginTop: SPACING.md,
+  s4SadEmoji: { fontSize: 48 },
+  s4Title: {
+    marginTop: SPACING[12],
     textAlign: 'center',
-  },
-  winnerSub: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 15,
-    color: COLORS.success,
-    marginTop: 4,
-    textAlign: 'center',
-    letterSpacing: 1,
-  },
-
-  // ── ELIMINATED ──
-  elimRoot:   { backgroundColor: '#0F0606' },
-  elimScroll: { padding: SPACING.md, alignItems: 'center', paddingBottom: 60 },
-  elimEmoji:  { fontSize: 64, marginTop: SPACING.lg },
-  elimTitle: {
-    fontFamily: FONTS.heading,
-    fontSize: 36,
-    color: COLORS.danger,
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 40,
+    color: '#E86B47',
     letterSpacing: 3,
-    marginTop: SPACING.sm,
+    fontWeight: '800',
   },
-  elimRound: {
-    fontFamily: FONTS.body,
-    fontSize: 13,
-    color: COLORS.textMuted,
-    marginTop: 4,
+  s4RoundPillWrap: {
+    alignItems: 'center',
+    marginTop: 10,
   },
-  elimByCard: { alignItems: 'center', marginTop: SPACING.md },
-  elimByLabel: {
-    fontFamily: FONTS.body,
+  s4RoundPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(194,52,11,0.15)',
+    borderWidth: 1,
+    borderColor: COLORS.red,
+    borderRadius: 4,
+  },
+  s4RoundPillText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
     fontSize: 11,
-    color: COLORS.textMuted,
+    color: '#E86B47',
+    letterSpacing: 1,
   },
-  elimByFlag: { fontSize: 48, marginTop: 4 },
-  elimByName: {
-    fontFamily: FONTS.heading,
-    fontSize: 22,
-    color: COLORS.textPrimary,
-  },
-  elimNation: {
-    fontFamily: FONTS.body,
-    fontSize: 15,
+  s4FinalScore: {
+    marginTop: 10,
+    textAlign: 'center',
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 12,
     color: COLORS.textSecondary,
-    marginTop: SPACING.md,
   },
-
-  // ── SHARED stats + reset ──
-  statsCard: {
-    backgroundColor: COLORS.bgSurface,
-    borderRadius: RADIUS.lg,
+  s4StatsBlock: {
+    paddingHorizontal: SPACING[16],
+    paddingTop: SPACING[20],
+    paddingBottom: SPACING[12],
+  },
+  s4StatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statBlock: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: SPACING.md,
-    marginTop: SPACING.lg,
-    width: '100%',
+    borderRadius: RADIUS.small,
+    alignItems: 'center',
+    gap: 4,
+    ...PIXEL_SHADOW,
   },
-  statsTitle: {
-    fontFamily: FONTS.heading,
-    fontSize: 12,
-    color: COLORS.accent,
-    letterSpacing: 2,
-    marginBottom: SPACING.sm,
+  statBlockValue: {
+    fontFamily: TYPOGRAPHY.fontMono,
+    fontSize: 28,
+    color: COLORS.textPrimary,
+    lineHeight: 28,
+  },
+  statBlockLabel: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 9,
+    color: COLORS.textMuted,
+    letterSpacing: 1,
     textAlign: 'center',
   },
-  statsRow:  { flexDirection: 'row', justifyContent: 'space-around' },
-  statCell:  { alignItems: 'center' },
-  statLabel: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 11,
-    color: COLORS.textMuted,
+  s4BestShadow: {
+    marginHorizontal: SPACING[16],
+    borderRadius: RADIUS.small,
+    ...PIXEL_SHADOW,
   },
-  statValue: {
-    fontFamily: FONTS.heading,
-    fontSize: 22,
-    color: COLORS.textPrimary,
+  s4BestCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.small,
+  },
+  s4BestIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 6,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: '#B98F1A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  s4BestLabel: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    color: '#B98F1A',
+    letterSpacing: 2,
+  },
+  s4BestText: {
     marginTop: 2,
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 12,
+    color: COLORS.textPrimary,
+  },
+  s4Ctas: {
+    paddingHorizontal: SPACING[16],
+    paddingTop: SPACING[16],
+    gap: 10,
+  },
+  s4FinishWrap: {
+    borderRadius: RADIUS.small,
+    ...PIXEL_SHADOW,
+  },
+  s4FinishBtn: {
+    paddingVertical: 14,
+    borderRadius: RADIUS.small,
+    borderWidth: 1,
+    borderColor: '#004E2C',
+    alignItems: 'center',
+  },
+  s4FinishText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    letterSpacing: 2,
+    fontWeight: '800',
+  },
+  s4FinishSub: {
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 10,
+    color: 'rgba(240,244,247,0.7)',
+    fontWeight: '400',
+    letterSpacing: 0.5,
+  },
+  s4MenuBtn: {
+    paddingVertical: 12,
+    borderRadius: RADIUS.small,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    ...PIXEL_SHADOW,
+  },
+  s4MenuText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
+    fontWeight: '800',
   },
 
-  resetBtn: {
-    marginTop: SPACING.xl,
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.xl,
+  // ── Screen 5 — Champion ──────────────────────────────────────────────────
+  s5Scroll: {
+    paddingHorizontal: SPACING[20],
+    paddingTop: SPACING[16],
+    paddingBottom: SPACING[32],
     alignItems: 'center',
-    width: '80%',
   },
-  resetBtnText: {
-    fontFamily: FONTS.heading,
+  s5Eyebrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: '#B98F1A',
+    borderRadius: 4,
+    marginBottom: 14,
+    ...PIXEL_SHADOW,
+  },
+  s5EyebrowDiamond: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 11,
+    color: COLORS.gold,
+  },
+  s5EyebrowText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 11,
+    color: COLORS.gold,
+    letterSpacing: 3,
+    fontWeight: '800',
+  },
+  s5FlagShadow: {
+    borderRadius: 12,
+    marginBottom: 14,
+    ...PIXEL_SHADOW,
+  },
+  s5FlagCard: {
+    width: 180,
+    height: 130,
+    borderRadius: 12,
+    backgroundColor: COLORS.background,
+    borderWidth: 3,
+    borderColor: COLORS.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  s5Nation: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 42,
+    color: COLORS.gold,
+    letterSpacing: 3,
+    marginBottom: 10,
+    textAlign: 'center',
+    fontWeight: '800',
+  },
+  s5PhraseShadow: {
+    borderRadius: RADIUS.small,
+    marginBottom: 18,
+    ...PIXEL_SHADOW,
+  },
+  s5PhraseCard: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.small,
+    alignItems: 'center',
+  },
+  s5PhraseLocal: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  s5PhraseDivider: {
+    width: '100%',
+    marginVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    borderStyle: 'dashed',
+  },
+  s5PhraseEn: {
+    fontFamily: TYPOGRAPHY.fontBody,
+    fontSize: 10,
+    color: COLORS.textMuted,
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  s5TrophyShadow: {
+    borderRadius: RADIUS.medium,
+    marginBottom: 14,
+    ...PIXEL_SHADOW,
+  },
+  s5TrophyCard: {
+    paddingHorizontal: 26,
+    paddingTop: 14,
+    paddingBottom: 10,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: '#B98F1A',
+    borderRadius: RADIUS.medium,
+    alignItems: 'center',
+    gap: 8,
+  },
+  s5TrophyLabel: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 10,
+    color: '#B98F1A',
+    letterSpacing: 1.5,
+  },
+  s5StatsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 18,
+    width: '100%',
+  },
+  s5MiniStat: {
+    flex: 1,
+    paddingVertical: 8,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 5,
+    alignItems: 'center',
+    gap: 2,
+  },
+  s5MiniStatValue: {
+    fontFamily: TYPOGRAPHY.fontMono,
     fontSize: 18,
     color: COLORS.textPrimary,
-    letterSpacing: 1,
   },
-
-  // ↺ Reset escape-hatch (top-right corner of every active phase)
-  startOverBtn: {
-    position: 'absolute',
-    top: SPACING.sm,
-    right: SPACING.sm,
-    zIndex: 10,
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-  },
-  startOverBtnText: {
-    fontFamily: FONTS.body,
-    fontSize: 11,
+  s5MiniStatLabel: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 8,
     color: COLORS.textMuted,
+    letterSpacing: 1.5,
+  },
+  s5ShareWrap: {
+    width: '100%',
+    borderRadius: RADIUS.small,
+    marginBottom: 10,
+    ...PIXEL_SHADOW,
+  },
+  s5ShareBtn: {
+    paddingVertical: 15,
+    borderRadius: RADIUS.small,
+    borderWidth: 1,
+    borderColor: '#B98F1A',
+    alignItems: 'center',
+  },
+  s5ShareText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 15,
+    color: COLORS.background,
+    letterSpacing: 3,
+    fontWeight: '800',
+  },
+  s5MenuBtn: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: RADIUS.small,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    ...PIXEL_SHADOW,
+  },
+  s5MenuText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    letterSpacing: 2,
+    fontWeight: '800',
   },
 
-  // ── OVERLAYS ──
+  // ── Overlays ─────────────────────────────────────────────────────────────
   overlayFull: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 100,
     backgroundColor: '#000',
   },
-  overlayWebView: {
-    flex: 1,
-  },
+  overlayWebView: { flex: 1 },
   overlayHeader: {
     height: 44,
-    backgroundColor: COLORS.bgPrimary,
+    backgroundColor: COLORS.background,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING[8],
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   overlayHeaderContext: {
-    fontFamily: FONTS.pixel,
+    fontFamily: TYPOGRAPHY.fontMono,
     fontSize: 10,
-    color: COLORS.accent,
+    color: COLORS.gold,
     letterSpacing: 1,
     flex: 1,
   },
   overlayHeaderTeams: {
-    fontFamily: FONTS.heading,
+    fontFamily: TYPOGRAPHY.fontHeading,
     fontSize: 14,
     color: COLORS.textPrimary,
     textAlign: 'center',
@@ -2160,8 +3245,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   overlayCloseBtnText: {
-    fontFamily: FONTS.bodyBold,
+    fontFamily: TYPOGRAPHY.fontHeading,
     fontSize: 16,
     color: '#ffffff',
+    fontWeight: '800',
   },
 });
