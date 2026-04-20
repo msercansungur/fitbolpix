@@ -5,7 +5,7 @@ import { TouchableOpacity } from 'react-native';
 import HomeScreen              from '../screens/HomeScreen';
 import FixturesScreen          from '../screens/FixturesScreen';
 import SimulatorScreen         from '../screens/SimulatorScreen';
-import PenaltyWebViewScreen    from '../screens/PenaltyWebViewScreen';
+import PenaltyMenuScreen       from '../screens/PenaltyMenuScreen';
 import TournamentScreen        from '../screens/TournamentScreen';
 import CollectionScreen        from '../screens/CollectionScreen';
 import {
@@ -97,7 +97,7 @@ export default function BottomTabNavigator() {
       />
       <Tab.Screen
         name="Penalty"
-        component={PenaltyWebViewScreen}
+        component={PenaltyMenuScreen}
         options={{ tabBarIcon: ({ color, size }) => <PenaltyIcon color={color} size={size} /> }}
       />
       <Tab.Screen
