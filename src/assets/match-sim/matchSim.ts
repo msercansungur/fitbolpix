@@ -252,7 +252,7 @@ function drawPitch() {
   ctx.restore();
 
   // Ad boards — top (just below score bar) and bottom (just above possession bar)
-  var ADS = ['FITBOLPIX', 'WC 2026', '\u26bd', 'FITBOLPIX', 'WC 2026', '\u26bd'];
+  var ADS = ['FITBOLPIX', 'CUP 26', '2026', 'FITBOLPIX', 'CUP 26', '2026'];
   var adY1 = SCORE_H, adY2 = GRASS_B;
   var asp = W / ADS.length;
   // Draw both ad strips

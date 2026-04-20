@@ -461,7 +461,7 @@ var GameScene = new Phaser.Class({
   // ─────────────────────────────────────────────────────────────────
   _buildAdBoards: function() {
     var panelColors = [0xC2340B, 0x007B46, 0xFACE43, 0x007B46, 0xC2340B, 0x007B46];
-    var panelTexts  = ['FITBOLPIX', 'WC 2026', '\u26bd', 'FITBOLPIX', 'WC 2026', '\u26bd'];
+    var panelTexts  = ['FITBOLPIX', 'CUP 26', '2026', 'FITBOLPIX', 'CUP 26', '2026'];
     var pw = Math.floor(W / 6);
     var ay = AD_BOARD_Y;  // only top ad board
 
