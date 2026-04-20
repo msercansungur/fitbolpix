@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
-import { COLORS, SPACING, } from '../constants/theme';
+import { COLORS, SPACING } from '../constants/theme';
 import { NATIONS, NATIONS_BY_ID } from '../constants/nations';
 import { Team } from '../types/simulator';
 import {
@@ -175,7 +175,6 @@ function ResultScreen({
 export default function PenaltyScreen({ route }: Props) {
   const paramHome = route.params?.homeTeamId ?? null;
   const paramAway = route.params?.awayTeamId ?? null;
-  const paramMode = route.params?.mode ?? null;
 
   // ── Top-level phase ────────────────────────────────────────────────────────
   const [topPhase, setTopPhase] = useState<ShootoutPhase>(
@@ -301,13 +300,6 @@ export default function PenaltyScreen({ route }: Props) {
 
     return () => clearTimeout(timer);
   }, [state?.kickPhase, advanceKick]);
-
-  // ── Auto-start when launched from PenaltyMenuScreen ──────────────────────
-  useEffect(() => {
-    if (paramHome && paramAway && paramMode && state === null && topPhase === 'kicking') {
-      startShootout(paramHome, paramAway, paramMode as ShootoutMode);
-    }
-  }, []);
 
   // ── User kick handlers ────────────────────────────────────────────────────
 
@@ -654,7 +646,7 @@ const styles = StyleSheet.create({
 
   // ── Page headers ──
   pageTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.primary,
     textAlign: 'center',
@@ -662,7 +654,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   pageSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textMuted,
     textAlign: 'center',
     marginBottom: SPACING.md,
@@ -683,13 +675,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modeBtnTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 1,
   },
   modeBtnSub: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textSecondary,
     marginTop: 4,
   },
@@ -705,7 +697,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pickerLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 1,
@@ -736,7 +728,7 @@ const styles = StyleSheet.create({
   },
   pickerFlag: { fontSize: 16 },
   pickerName: {
-    fontSize: 10,
+    fontSize: 11,
     color: COLORS.textSecondary,
     flex: 1,
   },
@@ -755,10 +747,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startBtnDisabled: {
-    backgroundColor: COLORS.bgCard,
+    backgroundColor: COLORS.bgCardAlt,
   },
   startBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#000',
     letterSpacing: 1,
@@ -773,7 +765,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   kickerText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
@@ -796,14 +788,14 @@ const styles = StyleSheet.create({
   commentaryBox: {
     marginHorizontal: SPACING.md,
     marginTop: SPACING.xs,
-    backgroundColor: COLORS.bgCard,
+    backgroundColor: COLORS.bgCardAlt,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: SPACING.sm,
   },
   commentaryText: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textPrimary,
     textAlign: 'center',
     fontWeight: '500',
@@ -817,7 +809,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   controlsLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 1,
@@ -825,7 +817,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   controlsHint: {
-    fontSize: 10,
+    fontSize: 11,
     color: COLORS.textSecondary,
     textAlign: 'center',
   },
@@ -850,12 +842,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   techniqueBtnTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
   techniqueBtnSub: {
-    fontSize: 10,
+    fontSize: 11,
     color: COLORS.textMuted,
   },
 
@@ -884,7 +876,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.xl,
   },
   cpuText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.textSecondary,
     textAlign: 'center',
@@ -899,7 +891,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
   },
   resultTitle: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 2,
@@ -908,20 +900,20 @@ const styles = StyleSheet.create({
     fontSize: 64,
   },
   resultWinner: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
     letterSpacing: 1,
   },
   resultScore: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
     color: COLORS.primary,
     letterSpacing: 2,
     marginTop: SPACING.sm,
   },
   resultNames: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textMuted,
     marginBottom: SPACING.lg,
   },
@@ -936,13 +928,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   playAgainBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#000',
     letterSpacing: 1,
   },
   backBtn: {
-    backgroundColor: COLORS.bgCard,
+    backgroundColor: COLORS.bgCardAlt,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -950,7 +942,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backBtnText: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.textSecondary,
     fontWeight: 'bold',
   },

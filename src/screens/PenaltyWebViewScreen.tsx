@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import WebView, { WebViewMessageEvent } from 'react-native-webview';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
 import { COLORS, SPACING, FONTS, RADIUS } from '../constants/theme';
 import { NATIONS, NATIONS_BY_ID } from '../constants/nations';
@@ -247,6 +248,8 @@ export default function PenaltyWebViewScreen({ route }: Props) {
   const paramMode = (route.params as any)?.mode ?? null;
   const paramFixture = (route.params as any)?.fixtureId ?? null;
 
+  const navigation = useNavigation();
+
   const saveResult         = useMatchStore((s: any) => s.saveResult);
   const saveKnockoutResult = useMatchStore((s: any) => s.saveKnockoutResult);
 
@@ -305,8 +308,7 @@ export default function PenaltyWebViewScreen({ route }: Props) {
         } else if (data.type === 'restart') {
           setWebViewKey((k) => k + 1);
         } else if (data.type === 'back') {
-          setGameStarted(false);
-          setSetupPhase('mode');
+        navigation.goBack();
         }
       } catch (_) {}
     },
