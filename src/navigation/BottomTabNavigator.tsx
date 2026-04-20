@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { Animated, View } from 'react-native';
 import { createBottomTabNavigator, BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { TouchableOpacity } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import HomeScreen              from '../screens/HomeScreen';
 import FixturesScreen          from '../screens/FixturesScreen';
 import SimulatorScreen         from '../screens/SimulatorScreen';
@@ -34,11 +35,10 @@ function AnimatedTabButton(props: BottomTabBarButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const selected = !!props.accessibilityState?.selected;
 
-  // Pulse on focus
   useEffect(() => {
     if (selected) {
       Animated.sequence([
-        Animated.timing(scale, { toValue: 1.18, duration: 90,  useNativeDriver: true }),
+        Animated.timing(scale, { toValue: 1.18, duration: 90, useNativeDriver: true }),
         Animated.timing(scale, { toValue: 1.00, duration: 120, useNativeDriver: true }),
       ]).start();
     }
@@ -48,35 +48,29 @@ function AnimatedTabButton(props: BottomTabBarButtonProps) {
     <TouchableOpacity
       {...(props as any)}
       activeOpacity={0.8}
-      style={[
-        props.style,
-        {
-          flex: 1,
-          flexDirection: 'column',
-          alignItems: 'stretch',
-          justifyContent: 'flex-start',
-          overflow: 'visible',
-        },
-      ]}
+      style={[props.style, {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        paddingTop: 14,
+        paddingBottom: 4,
+      }]}
       onPress={props.onPress}
     >
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-        {selected && (
-          <View style={{
-            position: 'absolute',
-            top: 0,
-            left: 8,
-            right: 8,
-            height: 3,
-            backgroundColor: '#FACE43',
-            borderBottomLeftRadius: 2,
-            borderBottomRightRadius: 2,
-          }} />
-        )}
-        <Animated.View style={{ transform: [{ scale }] }}>
-          {props.children}
-        </Animated.View>
-      </View>
+      {selected && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          width: 24,
+          height: 3,
+          backgroundColor: '#FACE43',
+          borderBottomLeftRadius: 2,
+          borderBottomRightRadius: 2,
+        }} />
+      )}
+      <Animated.View style={{ transform: [{ scale }], alignItems: 'center' }}>
+        {props.children}
+      </Animated.View>
     </TouchableOpacity>
   );
 }
@@ -87,20 +81,50 @@ export default function BottomTabNavigator() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: COLORS.bgPrimary,
-          borderTopColor: COLORS.border,
-          borderTopWidth: 1,
-          height: 72,
-          paddingBottom: 12,
-          paddingTop: 4,
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
+          height: 88,
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
         },
+        tabBarBackground: () => (
+          <LinearGradient
+            colors={['transparent', '#060B10']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+            }}
+          >
+            <View style={{
+              position: 'absolute',
+              bottom: 20,
+              left: 8,
+              right: 8,
+              top: 4,
+              backgroundColor: '#0F2129',
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: '#1C3948',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 3 },
+              shadowOpacity: 1,
+              shadowRadius: 0,
+              elevation: 6,
+            }} />
+          </LinearGradient>
+        ),
         tabBarActiveTintColor:   COLORS.accent,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarItemStyle: {
+          paddingTop: 0,
+          paddingBottom: 0,
           justifyContent: 'center',
           alignItems: 'center',
-          paddingTop: 4,
-          paddingBottom: 4,
         },
         tabBarLabelStyle: {
           fontFamily: FONTS.pixel,
@@ -108,10 +132,6 @@ export default function BottomTabNavigator() {
           letterSpacing: 0.5,
           marginTop: 2,
           textAlign: 'center',
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingTop: 0,
-          paddingBottom: 4,
         },
         tabBarButton: (props) => <AnimatedTabButton {...props} />,
       }}
