@@ -88,7 +88,10 @@ export default function BottomTabNavigator() {
       <Tab.Screen
         name="Fixtures"
         component={FixturesScreen}
-        options={{ tabBarIcon: ({ color, size }) => <FixturesIcon color={color} size={size} /> }}
+        options={{
+          tabBarLabel: 'Cup Fixture',
+          tabBarIcon: ({ color, size }) => <FixturesIcon color={color} size={size} />,
+        }}
       />
       <Tab.Screen
         name="Simulator"
@@ -103,7 +106,10 @@ export default function BottomTabNavigator() {
       <Tab.Screen
         name="Tournament"
         component={TournamentScreen}
-        options={{ tabBarIcon: ({ color, size }) => <TournamentIcon color={color} size={size} /> }}
+        options={{
+          tabBarLabel: 'Road to Glory',
+          tabBarIcon: ({ color, size }) => <TournamentIcon color={color} size={size} />,
+        }}
       />
       <Tab.Screen
         name="Collection"

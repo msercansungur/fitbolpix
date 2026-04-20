@@ -268,7 +268,7 @@ export default function FixturesScreen() {
       {/* ── Header ───────────────────────────────────────────── */}
       <View style={styles.header}>
         <PixelGlyph kind="trophy" color={COLORS.gold} px={3} />
-        <Text style={styles.headerTitle}>WC 2026</Text>
+        <Text style={styles.headerTitle}>Scores & Fixtures</Text>
         {isLoading && <Text style={styles.headerLoad}>⟳</Text>}
       </View>
 

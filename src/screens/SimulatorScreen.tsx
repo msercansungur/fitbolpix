@@ -489,7 +489,7 @@ export default function SimulatorScreen({ route }: Props) {
             if (finalMatch?.result) {
               const r = finalMatch.result;
               const winner = r.homeScore >= r.awayScore ? NATIONS_BY_ID[r.homeTeamId] : NATIONS_BY_ID[r.awayTeamId];
-              if (winner) Alert.alert('🏆 World Cup Winner!', `${winner.flag} ${winner.name}`);
+              if (winner) Alert.alert('🏆 World Football Championship Winner!', `${winner.flag} ${winner.name}`);
             }
           },
         },

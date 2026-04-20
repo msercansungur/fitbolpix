@@ -723,9 +723,9 @@ export default function TournamentScreen(_props: Props) {
       const phrase = CHAMPION_PHRASES[nationId] ?? GENERIC_PHRASE;
       await Share.share({
         message:
-          `🏆 I just won the 2026 World Cup with ${nationName} on FiTBOLPiX!\n` +
+          `🏆 I just won the 2026 World Football Championship with ${nationName} on FiTBOLPiX!\n` +
           `${phrase.local}\n` +
-          `#FiTBOLPiX #WC2026`,
+          `#FiTBOLPiX #Cup26`,
       });
     } catch (_) {}
   }, []);
@@ -1099,7 +1099,7 @@ export default function TournamentScreen(_props: Props) {
             <Text style={styles.s1Title}>
               ROAD TO <Text style={{ color: COLORS.gold }}>GLORY</Text>
             </Text>
-            <Text style={styles.s1Subtitle}>Pick your nation. Win the World Cup.</Text>
+            <Text style={styles.s1Subtitle}>Pick your nation. Win the World Football Championship.</Text>
           </View>
 
           {/* Search */}
@@ -1220,7 +1220,7 @@ export default function TournamentScreen(_props: Props) {
           {/* Eyebrow */}
           <View style={styles.s5Eyebrow}>
             <Text style={styles.s5EyebrowDiamond}>◆</Text>
-            <Text style={styles.s5EyebrowText}>WORLD CUP 2026 CHAMPIONS</Text>
+            <Text style={styles.s5EyebrowText}>WORLD FOOTBALL CHAMPIONSHIP 2026 CHAMPIONS</Text>
             <Text style={styles.s5EyebrowDiamond}>◆</Text>
           </View>
 
@@ -1249,7 +1249,7 @@ export default function TournamentScreen(_props: Props) {
           <View style={styles.s5TrophyShadow}>
             <View style={styles.s5TrophyCard}>
               <PixelTrophy size={3} />
-              <Text style={styles.s5TrophyLabel}>FIFA WORLD CUP™</Text>
+              <Text style={styles.s5TrophyLabel}>FIFA WORLD FOOTBALL CHAMPIONSHIP™</Text>
             </View>
           </View>
 
@@ -1332,7 +1332,7 @@ export default function TournamentScreen(_props: Props) {
         </View>
 
         <ScrollView contentContainerStyle={styles.s4Scroll} showsVerticalScrollIndicator={false}>
-          <TopBar title="CAMPAIGN OVER" subtitle="World Cup 2026" onBack={handleStartOver} />
+          <TopBar title="CAMPAIGN OVER" subtitle="World Football Championship 2026" onBack={handleStartOver} />
 
           {/* Sad tile */}
           <View style={styles.s4SadWrap}>
@@ -1399,19 +1399,6 @@ export default function TournamentScreen(_props: Props) {
 
           {/* CTAs */}
           <View style={styles.s4Ctas}>
-            <TouchableOpacity activeOpacity={0.85} onPress={handleFinishTournament} style={styles.s4FinishWrap}>
-              <LinearGradient
-                colors={['#94C952', COLORS.green]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.s4FinishBtn}
-              >
-                <Text style={styles.s4FinishText}>
-                  ▶  FINISH TOURNAMENT
-                  <Text style={styles.s4FinishSub}>  (sim the rest)</Text>
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
             <TouchableOpacity activeOpacity={0.85} onPress={handleReset} style={styles.s4MenuBtn}>
               <Text style={styles.s4MenuText}>⌂ GO TO MAIN MENU</Text>
             </TouchableOpacity>
@@ -1441,7 +1428,7 @@ export default function TournamentScreen(_props: Props) {
         <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
           <TopBar
             title={`GROUP ${userGroup} · ${userNation.name.toUpperCase()}`}
-            subtitle="World Cup 2026 · Group Phase"
+            subtitle="World Football Championship 2026 · Group Phase"
             onBack={handleStartOver}
             right={
               <View style={styles.topBarFlagRight}>

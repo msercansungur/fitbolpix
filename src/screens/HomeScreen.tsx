@@ -181,7 +181,8 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <FitbolpixLogo size="medium" />
-            <Text style={styles.headerSub}>2026 · CHAMPIONSHIP MODE</Text>
+            <Text style={styles.headerSub}>World Football Championship 2026</Text>
+            <Text style={styles.headerSub}>Track · Simulate · Play · Collect</Text>
           </View>
           <TouchableOpacity
             style={styles.gearBtn}
@@ -284,7 +285,7 @@ export default function HomeScreen() {
               glyph="trophy"
               accent={COLORS.red}
               title="ROAD TO GLORY"
-              subtitle="WC 2026"
+              subtitle="Cup 26"
               onPress={() => navigation.navigate('Tournament')}
             />
             <QuickLaunchTile
