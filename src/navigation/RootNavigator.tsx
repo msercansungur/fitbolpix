@@ -11,6 +11,7 @@ export type RootStackParamList = {
     homeTeamId: string;
     awayTeamId: string;
     mode: 'best_of_5' | 'sudden_death';
+    firstShooter?: 'home' | 'away';
   };
 };
 

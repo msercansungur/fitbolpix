@@ -247,6 +247,7 @@ export default function PenaltyWebViewScreen({ route }: Props) {
   const paramAway = route.params?.awayTeamId ?? null;
   const paramMode = (route.params as any)?.mode ?? null;
   const paramFixture = (route.params as any)?.fixtureId ?? null;
+  const paramFirstShooter = (route.params as any)?.firstShooter ?? 'home';
 
   const navigation = useNavigation();
 
@@ -320,7 +321,7 @@ export default function PenaltyWebViewScreen({ route }: Props) {
     const home = pickedHome ? NATIONS_BY_ID[pickedHome] : null;
     const away = pickedAway ? NATIONS_BY_ID[pickedAway] : null;
     if (!home || !away) return 'true;';
-    return buildConfig(home, away, mode, 'home');
+    return buildConfig(home, away, mode, paramFirstShooter);
   })();
 
   // ── GAME RUNNING: WebView only ─────────────────────────────────────────

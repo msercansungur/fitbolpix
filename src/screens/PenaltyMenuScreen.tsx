@@ -257,6 +257,7 @@ export default function PenaltyMenuScreen() {
   const [selectedMode, setSelectedMode] = useState<ShootoutMode | null>(null);
   const [pickedHome,   setPickedHome]   = useState<string | null>(null);
   const [pickedAway,   setPickedAway]   = useState<string | null>(null);
+  const [firstShooter, setFirstShooter] = useState<'home' | 'away'>('home');
 
   // Bottom-sheet picker state
   const [pickerOpen,  setPickerOpen]  = useState(false);
@@ -319,8 +320,9 @@ export default function PenaltyMenuScreen() {
       homeTeamId: pickedHome,
       awayTeamId: pickedAway,
       mode: selectedMode,
+      firstShooter,
     });
-  }, [pickedHome, pickedAway, selectedMode, navigation]);
+  }, [pickedHome, pickedAway, selectedMode, firstShooter, navigation]);
 
   // ── Result-phase actions ─────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
@@ -526,13 +528,31 @@ export default function PenaltyMenuScreen() {
                   <Text style={styles.optionLabel}>KICKS</Text>
                   <Text style={styles.optionValue}>{kicksLabel}</Text>
                 </View>
-                <View style={styles.optionCell}>
-                  <Text style={styles.optionLabel}>FIRST SHOOTER</Text>
+                <TouchableOpacity
+                  style={styles.optionCell}
+                  activeOpacity={0.7}
+                  onPress={() => setFirstShooter((v) => (v === 'home' ? 'away' : 'home'))}
+                >
+                  <Text style={styles.optionLabel}>PLAY AS</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={styles.greenDot} />
-                    <Text style={styles.optionValue}>HOME</Text>
+                    <Text
+                      style={[
+                        styles.optionValue,
+                        { color: firstShooter === 'home' ? COLORS.gold : COLORS.teal, marginTop: 2 },
+                      ]}
+                    >
+                      ⇄
+                    </Text>
+                    <Text
+                      style={[
+                        styles.optionValue,
+                        { color: firstShooter === 'home' ? COLORS.gold : COLORS.teal },
+                      ]}
+                    >
+                      {firstShooter === 'home' ? 'HOME' : 'AWAY'}
+                    </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               </View>
 
               {/* Round preview (classic only) */}
