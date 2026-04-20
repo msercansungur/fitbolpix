@@ -2,7 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BottomTabNavigator from './BottomTabNavigator';
 import AboutScreen from '../screens/AboutScreen';
-import PenaltyScreen from '../screens/PenaltyScreen';
+import PenaltyWebViewScreen from '../screens/PenaltyWebViewScreen';
 
 export type RootStackParamList = {
   MainTabs: undefined;
@@ -21,7 +21,7 @@ export default function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="MainTabs"    component={BottomTabNavigator} />
       <Stack.Screen name="About"       component={AboutScreen} />
-      <Stack.Screen name="PenaltyGame" component={PenaltyScreen as any} />
+      <Stack.Screen name="PenaltyGame" component={PenaltyWebViewScreen as any} />
     </Stack.Navigator>
   );
 }

@@ -175,6 +175,7 @@ function ResultScreen({
 export default function PenaltyScreen({ route }: Props) {
   const paramHome = route.params?.homeTeamId ?? null;
   const paramAway = route.params?.awayTeamId ?? null;
+  const paramMode = route.params?.mode ?? null;
 
   // ── Top-level phase ────────────────────────────────────────────────────────
   const [topPhase, setTopPhase] = useState<ShootoutPhase>(
@@ -300,6 +301,13 @@ export default function PenaltyScreen({ route }: Props) {
 
     return () => clearTimeout(timer);
   }, [state?.kickPhase, advanceKick]);
+
+  // ── Auto-start when launched from PenaltyMenuScreen ──────────────────────
+  useEffect(() => {
+    if (paramHome && paramAway && paramMode && state === null && topPhase === 'kicking') {
+      startShootout(paramHome, paramAway, paramMode as ShootoutMode);
+    }
+  }, []);
 
   // ── User kick handlers ────────────────────────────────────────────────────
 
