@@ -674,7 +674,7 @@ var GameScene = new Phaser.Class({
 
   _redrawKicker: function(pose) {
     var p = this.kickerParts;
-    var kit = this.cfg.homeTeam.kitColor;
+    var kit = this.currentSide === 'home' ? this.cfg.homeTeam.kitColor : this.cfg.awayTeam.kitColor;
     var skin = 0xf5cba7;
     Object.keys(p).forEach(function(k){ p[k].clear(); });
 
