@@ -53,7 +53,7 @@ const KIT_COLORS: Record<string, number> = {
   eng:0xFFFFFF,cro:0xFF0000,gha:0x006B3F,pan:0xD21034,
 };
 
-function buildPenaltyConfig(home: Team, away: Team, mode: 'best_of_5' | 'sudden_death', userTeam: 'home' | 'away'): string {
+function buildPenaltyConfig(home: Team, away: Team, mode: 'best_of_5' | 'sudden_death' | 'best_of_5_draw', userTeam: 'home' | 'away'): string {
   const { homeColor, awayColor } = resolveKitColors(home.id, away.id, KIT_COLORS);
   const cfg = {
     homeTeam: { id:home.id, name:home.name, flag:home.flag, kitColor:homeColor, penalty_skill:home.penalty_skill??65, goalkeeper_rating:home.goalkeeper_rating??65 },
@@ -83,7 +83,7 @@ type PenaltyOverlay = {
   key: string;
   homeTeamId: string;
   awayTeamId: string;
-  mode: 'best_of_5' | 'sudden_death';
+  mode: 'best_of_5' | 'sudden_death' | 'best_of_5_draw';
   userTeam: 'home' | 'away';
   fixtureId?: string;
   matchId?: number;
@@ -872,7 +872,7 @@ export default function TournamentScreen(_props: Props) {
     setPenOverlay({
       key: `pen-grp-${fixtureId}-${Date.now()}`,
       homeTeamId: fixture.homeTeamId, awayTeamId: fixture.awayTeamId,
-      mode: 'best_of_5', fixtureId,
+      mode: 'best_of_5_draw', fixtureId,
       userTeam: userIsHome ? 'home' : 'away',
     });
   }, [selectedNationId]);

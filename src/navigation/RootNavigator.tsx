@@ -10,7 +10,7 @@ export type RootStackParamList = {
   PenaltyGame: {
     homeTeamId: string;
     awayTeamId: string;
-    mode: 'best_of_5' | 'sudden_death';
+    mode: 'best_of_5' | 'sudden_death' | 'best_of_5_draw';
     firstShooter?: 'home' | 'away';
   };
 };

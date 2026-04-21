@@ -189,7 +189,8 @@ function checkShootoutEnd(kicks, mode, homeId, awayId) {
     var done = ht, rem = MAX - done;
     if (done === MAX) {
       if (hs !== as) return { ended:true, winner:hs > as ? homeId : awayId, tieBreaker:false };
-      return { ended:true, winner:null, tieBreaker:true };
+      if (mode === 'best_of_5_draw') return { ended:true, winner:null, tieBreaker:false };
+      return { ended:false, winner:null, tieBreaker:true };
     }
     if (hs - as > rem) return { ended:true, winner:homeId, tieBreaker:false };
     if (as - hs > rem) return { ended:true, winner:awayId, tieBreaker:false };
@@ -1468,7 +1469,7 @@ var GameScene = new Phaser.Class({
     if (check.tieBreaker) {
       this.mode = 'sudden_death';
     }
-    if (check.ended) {
+    if (check.ended && !check.tieBreaker) {
       this._showResult(check.winner);
       return;
     }
