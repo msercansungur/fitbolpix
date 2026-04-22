@@ -454,7 +454,7 @@ function GroupMatchCard({
             </TouchableOpacity>
             <TouchableOpacity style={styles.simBtnTeal} onPress={onPenalties} activeOpacity={0.8}>
               <Text style={styles.simBtnTealText}>PENALTY</Text>
-              <Text style={[styles.simBtnSub, { color: COLORS.teal }]}>Shootout</Text>
+              <Text style={[styles.simBtnSub, { color: COLORS.teal }]}>5 Kicks</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1765,7 +1765,7 @@ export default function TournamentScreen(_props: Props) {
                         activeOpacity={0.8}
                       >
                         <Text style={styles.simBtnTealText}>PENALTIES</Text>
-                        <Text style={[styles.simBtnSub, { color: COLORS.teal }]}>Direct</Text>
+                        <Text style={[styles.simBtnSub, { color: COLORS.teal }]}>Until Miss</Text>
                       </TouchableOpacity>
                     </View>
                   </LinearGradient>

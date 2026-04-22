@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,10 @@ import {
   ScrollView,
   SafeAreaView,
   StyleSheet,
+  Animated,
 } from 'react-native';
 import WebView, { WebViewMessageEvent } from 'react-native-webview';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
@@ -249,6 +251,8 @@ export default function PenaltyWebViewScreen({ route }: Props) {
   const paramFixture = (route.params as any)?.fixtureId ?? null;
   const paramFirstShooter = (route.params as any)?.firstShooter ?? 'home';
 
+  const insets = useSafeAreaInsets();
+
   const navigation = useNavigation();
 
   const saveResult         = useMatchStore((s: any) => s.saveResult);
@@ -270,6 +274,20 @@ export default function PenaltyWebViewScreen({ route }: Props) {
     paramHome && paramAway ? 'teams' : 'mode',
   );
   const [webViewKey,   setWebViewKey]   = useState(0);
+
+  // ── Loading overlay state ──────────────────────────────────────────────
+  const [gameLoading, setGameLoading] = useState(true);
+  const loadingAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (gameLoading) {
+      Animated.timing(loadingAnim, {
+        toValue: 1,
+        duration: 9000,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [gameLoading]);
 
   // ── WebView message handler ────────────────────────────────────────────
   const handleMessage = useCallback(
@@ -308,6 +326,8 @@ export default function PenaltyWebViewScreen({ route }: Props) {
           }
         } else if (data.type === 'restart') {
           setWebViewKey((k) => k + 1);
+          setGameLoading(true);
+          loadingAnim.setValue(0);
         } else if (data.type === 'back') {
         navigation.goBack();
         }
@@ -328,22 +348,66 @@ export default function PenaltyWebViewScreen({ route }: Props) {
   if (gameStarted && pickedHome && pickedAway) {
     return (
       <SafeAreaView style={styles.gameRoot}>
-        <WebView
-          key={webViewKey}
-          source={{ html: PENALTY_GAME_HTML }}
-          style={styles.webview}
-          javaScriptEnabled
-          originWhitelist={['*']}
-          allowsInlineMediaPlayback
-          mediaPlaybackRequiresUserAction={false}
-          injectedJavaScriptBeforeContentLoaded={configScript}
-          onMessage={handleMessage}
-          scrollEnabled={false}
-          bounces={false}
-          overScrollMode="never"
-          showsHorizontalScrollIndicator={false}
-          showsVerticalScrollIndicator={false}
-        />
+        <View style={{ flex: 1, paddingBottom: insets.bottom }}>
+          <WebView
+            key={webViewKey}
+            source={{ html: PENALTY_GAME_HTML }}
+            style={styles.webview}
+            javaScriptEnabled
+            originWhitelist={['*']}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            injectedJavaScriptBeforeContentLoaded={configScript}
+            onMessage={handleMessage}
+            onLoadEnd={() => setGameLoading(false)}
+            scrollEnabled={false}
+            bounces={false}
+            overScrollMode="never"
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+          />
+          {gameLoading && (
+            <View style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: '#0B171F',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10,
+            }}>
+              <Text style={{
+                fontFamily: 'BarlowCondensed_700Bold',
+                fontSize: 20,
+                color: '#FACE43',
+                letterSpacing: 3,
+                marginBottom: 16,
+              }}>LOADING MATCH...</Text>
+              <View style={{
+                width: 200,
+                height: 4,
+                backgroundColor: '#1C3948',
+                borderRadius: 2,
+                overflow: 'hidden',
+              }}>
+                <Animated.View style={{
+                  height: 4,
+                  backgroundColor: '#FACE43',
+                  width: loadingAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', '100%'],
+                  }),
+                }} />
+              </View>
+              <Text style={{
+                fontFamily: 'BarlowCondensed_700Bold',
+                fontSize: 11,
+                color: '#58788D',
+                letterSpacing: 2,
+                marginTop: 12,
+              }}>WARMING UP PIXEL ENGINE...</Text>
+            </View>
+          )}
+        </View>
       </SafeAreaView>
     );
   }
