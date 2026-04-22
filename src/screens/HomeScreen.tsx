@@ -286,7 +286,7 @@ export default function HomeScreen() {
               glyph="trophy"
               accent={COLORS.red}
               title="ROAD TO GLORY"
-              subtitle="Cup 26"
+              subtitle="Sim the tournament"
               onPress={() => navigation.navigate('Tournament')}
             />
             <QuickLaunchTile

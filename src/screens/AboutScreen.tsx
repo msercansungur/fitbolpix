@@ -131,7 +131,7 @@ export default function AboutScreen() {
   const handleReset = () => {
     Alert.alert(
       'Reset Campaign Data?',
-      'This will wipe your Cup 26 progress, match history, and selected nation. This cannot be undone.',
+      'This will wipe your tournament progress, match history, and selected nation. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

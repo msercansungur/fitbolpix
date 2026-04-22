@@ -35,5 +35,5 @@ export const DID_YOU_KNOW = [
   "Sir Viv Richards is the only person to have played in both a Football World Cup and a Cricket World Cup. 🏏",
   "Luis Monti played in the 1930 final for Argentina — then played in the 1934 final for Italy. The only man to represent two different countries in World Cup finals. 🔄",
   "Brazil created the tradition of lifting the trophy after winning — before 1958, nobody did it. Now everyone does. 🏆",
-  "WC 2026 will be the first ever World Cup held across 3 countries: USA, Canada and Mexico. 🌎",
+  "The 2026 tournament will be the first ever World Football Championship held across 3 countries: USA, Canada and Mexico. 🌎",
 ];

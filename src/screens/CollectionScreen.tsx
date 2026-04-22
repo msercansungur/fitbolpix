@@ -292,7 +292,7 @@ type CategoryDef = {
 const CATEGORIES: CategoryDef[] = [
   {
     id: 'tournament', glyph: 'trophy', label: 'TOURNAMENT 26',
-    sub: 'All 64 matches of WC 2026',
+    sub: 'All 64 matches of the 2026 tournament',
     have: 0, total: 64,
     gradient: cardGold, accent: COLORS.gold, border: '#B98F1A',
   },

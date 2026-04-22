@@ -198,7 +198,7 @@ class PenaltyScene extends Phaser.Scene {
     const g = this.add.graphics();
     const boardY = H * 0.14;
     const boardH = H * 0.05;
-    const labels = ['FITBOLPIX', 'WC 2026', '⚽', 'GOOOL!', 'FITBOLPIX', 'WC 2026'];
+    const labels = ['FITBOLPIX', 'CUP 26', '2026', 'GOOOL!', 'FITBOLPIX', 'CUP 26'];
     const bw = W / labels.length;
     labels.forEach((lbl, i) => {
       const col = i % 2 === 0 ? 0x1a3d28 : 0x0d2818;
