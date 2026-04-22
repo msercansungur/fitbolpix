@@ -3202,6 +3202,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 100,
     backgroundColor: '#000',
+    paddingBottom: 90,
   },
   overlayWebView: { flex: 1 },
   overlayHeader: {
