@@ -8,7 +8,7 @@ import {
   Animated,
   useAnimatedValue,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { GROUP_FIXTURES, GROUPS, fixturesByGroup } from '../constants/fixtures';
@@ -229,6 +229,7 @@ function FixtureCard({
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 export default function FixturesScreen() {
+  const insets = useSafeAreaInsets();
   const [viewMode,       setViewMode]       = useState<ViewMode>('groups');
   const [activeGroup,    setActiveGroup]    = useState<string>('A');
   const [activeMatchday, setActiveMatchday] = useState<1 | 2 | 3>(1);
@@ -333,7 +334,7 @@ export default function FixturesScreen() {
             })}
           </ScrollView>
 
-          <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+          <ScrollView style={styles.content} contentContainerStyle={[styles.contentInner, { paddingBottom: 120 + insets.bottom }]}>
             {/* Group heading */}
             <View style={styles.sectionRow}>
               <Text style={styles.sectionTitle}>GROUP {activeGroup}</Text>
@@ -456,7 +457,7 @@ export default function FixturesScreen() {
             })}
           </ScrollView>
 
-          <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+          <ScrollView style={styles.content} contentContainerStyle={[styles.contentInner, { paddingBottom: 120 + insets.bottom }]}>
             <View style={styles.sectionRow}>
               <Text style={styles.sectionTitle}>MATCHDAY {activeMatchday}</Text>
             </View>

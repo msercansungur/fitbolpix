@@ -12,7 +12,7 @@ import {
   Share,
   TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import WebView, { WebViewMessageEvent } from 'react-native-webview';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -483,6 +483,7 @@ function StatBlock({ label, value, accent }: { label: string; value: string | nu
 // Main screen
 // ═════════════════════════════════════════════════════════════════════════════
 export default function TournamentScreen(_props: Props) {
+  const insets = useSafeAreaInsets();
   // ── Stores ──────────────────────────────────────────────────────────────
   const {
     isActive, hasWon, isEliminated, eliminatedAt, eliminatedBy,
@@ -1125,7 +1126,7 @@ export default function TournamentScreen(_props: Props) {
             keyExtractor={(n) => n.id}
             numColumns={4}
             columnWrapperStyle={{ gap: 8 }}
-            contentContainerStyle={styles.s1GridContent}
+            contentContainerStyle={[styles.s1GridContent, { paddingBottom: 100 + insets.bottom }]}
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => {
               const isSelected = item.id === pickedNation;
@@ -1161,22 +1162,23 @@ export default function TournamentScreen(_props: Props) {
           />
 
           {/* Sticky bottom CTA */}
-          <View style={styles.s1BottomBar}>
-            {selNation && (
-              <View style={styles.s1SelectedCard}>
-                <View style={styles.s1SelectedFlag}>
-                  <PixelFlag isoCode={selNation.isoCode} size={28} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.s1SelectedLabel}>SELECTED</Text>
-                  <Text style={styles.s1SelectedName} numberOfLines={1}>
-                    {selNation.name.toUpperCase()}
-                    <Text style={{ color: COLORS.textSecondary }}> · GROUP {selNation.group}</Text>
-                  </Text>
-                </View>
-                <DifficultyDots strength={selNation.strength} dotSize={4} />
-              </View>
-            )}
+          <View style={[styles.s1BottomBar, { bottom: 30 + insets.bottom }]}>
+            <View style={styles.s1BottomLeft}>
+              {selNation && (
+                <>
+                  <View style={styles.s1SelectedFlag}>
+                    <PixelFlag isoCode={selNation.isoCode} size={24} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.s1SelectedLabel}>SELECTED</Text>
+                    <Text style={styles.s1SelectedName} numberOfLines={1}>
+                      {selNation.name.toUpperCase()}
+                      <Text style={{ color: COLORS.textSecondary }}> · GROUP {selNation.group}</Text>
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
             <TouchableOpacity
               disabled={!pickedNation}
               onPress={handleBeginJourney}
@@ -1189,7 +1191,7 @@ export default function TournamentScreen(_props: Props) {
                 end={{ x: 0, y: 1 }}
                 style={styles.s1Cta}
               >
-                <Text style={styles.s1CtaText}>⚡ START CAMPAIGN</Text>
+                <Text style={styles.s1CtaText}>⚡ START</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -1216,7 +1218,7 @@ export default function TournamentScreen(_props: Props) {
           />
         </View>
         <Confetti />
-        <ScrollView contentContainerStyle={styles.s5Scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.s5Scroll, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
           {/* Eyebrow */}
           <View style={styles.s5Eyebrow}>
             <Text style={styles.s5EyebrowDiamond}>◆</Text>
@@ -1331,7 +1333,7 @@ export default function TournamentScreen(_props: Props) {
           />
         </View>
 
-        <ScrollView contentContainerStyle={styles.s4Scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.s4Scroll, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
           <TopBar title="CAMPAIGN OVER" subtitle="World Football Championship 2026" onBack={handleStartOver} />
 
           {/* Sad tile */}
@@ -1425,7 +1427,7 @@ export default function TournamentScreen(_props: Props) {
 
     return (
       <SafeAreaView style={styles.root}>
-        <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scrollPad, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
           <TopBar
             title={`GROUP ${userGroup} · ${userNation.name.toUpperCase()}`}
             subtitle="World Football Championship 2026 · Group Phase"
@@ -1639,7 +1641,7 @@ export default function TournamentScreen(_props: Props) {
 
     return (
       <SafeAreaView style={styles.root}>
-        <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scrollPad, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
           <TopBar
             title="KNOCKOUTS"
             subtitle={nextMatch ? `${roundLabel} · Your path to the final` : 'Your path to the final'}
@@ -2127,12 +2129,22 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     paddingHorizontal: SPACING[16],
-    paddingTop: SPACING[20],
-    paddingBottom: SPACING[16],
+    paddingTop: SPACING[12],
+    paddingBottom: SPACING[12],
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+  },
+  s1BottomLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 40,
   },
   s1SelectedCard: {
     flexDirection: 'row',
@@ -2147,8 +2159,8 @@ const styles = StyleSheet.create({
     ...PIXEL_SHADOW,
   },
   s1SelectedFlag: {
-    width: 40,
-    height: 30,
+    width: 34,
+    height: 26,
     borderRadius: 3,
     backgroundColor: COLORS.background,
     borderWidth: 1,
@@ -2170,11 +2182,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   s1CtaWrap: {
+    width: 120,
     borderRadius: RADIUS.small,
     ...PIXEL_SHADOW,
   },
   s1Cta: {
-    paddingVertical: 14,
+    paddingVertical: 10,
     borderRadius: RADIUS.small,
     borderWidth: 1,
     borderColor: '#B98F1A',
@@ -2182,9 +2195,9 @@ const styles = StyleSheet.create({
   },
   s1CtaText: {
     fontFamily: TYPOGRAPHY.fontHeading,
-    fontSize: 16,
+    fontSize: 13,
     color: COLORS.background,
-    letterSpacing: 2.5,
+    letterSpacing: 1.5,
     fontWeight: '800',
   },
 

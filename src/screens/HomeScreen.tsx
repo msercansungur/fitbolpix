@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -134,6 +134,7 @@ function QuickLaunchTile({
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const navigation = useNavigation<HomeNavProp>();
+  const insets = useSafeAreaInsets();
   const { isActive, isEliminated, hasWon, selectedNationId } = useTournamentStore();
 
   const showBanner = isActive && !isEliminated && !hasWon && selectedNationId != null;
@@ -175,7 +176,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
 
         {/* ── Header ───────────────────────────────────────────── */}
         <View style={styles.header}>

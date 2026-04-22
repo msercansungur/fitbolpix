@@ -14,7 +14,7 @@ import {
   Animated,
 } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useSimulator } from '../hooks/useSimulator';
@@ -319,6 +319,7 @@ function runQuickSim(
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 export default function SimulatorScreen({ route }: Props) {
+  const insets = useSafeAreaInsets();
   // ── MATCH mode state (preserved) ──────────────────────────────────────────
   const { state, selectHomeTeam, selectAwayTeam, resetMatch, setTeamsAndStart } = useSimulator();
   const feedRef   = useRef<FlatList<MatchEvent>>(null);
@@ -898,20 +899,22 @@ export default function SimulatorScreen({ route }: Props) {
               </TouchableOpacity>
             </View>
           ) : (
-            <WebView
-              source={{ html: matchHtmlRef.current }}
-              onMessage={handleWebViewMessage}
-              style={styles.webViewMatch}
-              javaScriptEnabled
-              originWhitelist={['*']}
-              allowsInlineMediaPlayback
-              mediaPlaybackRequiresUserAction={false}
-              scrollEnabled={false}
-              bounces={false}
-              overScrollMode="never"
-              showsHorizontalScrollIndicator={false}
-              showsVerticalScrollIndicator={false}
-            />
+            <View style={{ flex: 1, paddingBottom: 40 + insets.bottom }}>
+              <WebView
+                source={{ html: matchHtmlRef.current }}
+                onMessage={handleWebViewMessage}
+                style={styles.webViewMatch}
+                javaScriptEnabled
+                originWhitelist={['*']}
+                allowsInlineMediaPlayback
+                mediaPlaybackRequiresUserAction={false}
+                scrollEnabled={false}
+                bounces={false}
+                overScrollMode="never"
+                showsHorizontalScrollIndicator={false}
+                showsVerticalScrollIndicator={false}
+              />
+            </View>
           )}
         </SafeAreaView>
       );
@@ -935,7 +938,7 @@ export default function SimulatorScreen({ route }: Props) {
             data={state.events}
             keyExtractor={(e) => e.id}
             renderItem={renderEvent}
-            contentContainerStyle={styles.feedContent}
+            contentContainerStyle={[styles.feedContent, { paddingBottom: 120 + insets.bottom }]}
             style={styles.feed}
             onContentSizeChange={() => feedRef.current?.scrollToEnd({ animated: true })}
           />
@@ -953,7 +956,7 @@ export default function SimulatorScreen({ route }: Props) {
     return (
       <SafeAreaView style={styles.root}>
         {topToggle}
-        <ScrollView contentContainerStyle={styles.h2hScroll}>
+        <ScrollView contentContainerStyle={[styles.h2hScroll, { paddingBottom: 120 + insets.bottom }]}>
           <Text style={styles.h2hTitle}>HEAD TO HEAD</Text>
           <Text style={styles.h2hSubtitle}>Tap a slot to pick a nation</Text>
 
@@ -1117,7 +1120,7 @@ export default function SimulatorScreen({ route }: Props) {
 
       {/* ── GROUPS VIEW ──────────────────────────────────────────────────────── */}
       {tourneyView === 'groups' && (
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+        <ScrollView style={styles.content} contentContainerStyle={[styles.contentInner, { paddingBottom: 120 + insets.bottom }]}>
           <View style={styles.sectionRow}>
             <Text style={styles.sectionTitle}>GROUP {activeGroup}</Text>
             <Text style={styles.sectionMeta}>{simulatedCount}/6 SIMULATED</Text>
@@ -1182,7 +1185,7 @@ export default function SimulatorScreen({ route }: Props) {
 
       {/* ── MATCHDAYS VIEW ───────────────────────────────────────────────────── */}
       {tourneyView === 'matchdays' && (
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+        <ScrollView style={styles.content} contentContainerStyle={[styles.contentInner, { paddingBottom: 120 + insets.bottom }]}>
           <View style={styles.mdViewHead}>
             <View style={{ flex: 1 }}>
               <Text style={styles.sectionTitle}>MATCHDAY {activeMatchday}</Text>

@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, PIXEL_SHADOW } from '../theme';
 import {
@@ -425,9 +425,10 @@ function FullCollectionState() {
 // Screen
 // ═════════════════════════════════════════════════════════════════════════════
 export default function CollectionScreen() {
+  const insets = useSafeAreaInsets();
   return (
     <SafeAreaView style={styles.root}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: 120 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <HeaderBar />
         {COLLECTION_UNLOCKED ? <FullCollectionState /> : <ComingSoonState />}
       </ScrollView>

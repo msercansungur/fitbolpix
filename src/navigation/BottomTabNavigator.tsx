@@ -3,6 +3,7 @@ import { Animated, View } from 'react-native';
 import { createBottomTabNavigator, BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeScreen              from '../screens/HomeScreen';
 import FixturesScreen          from '../screens/FixturesScreen';
 import SimulatorScreen         from '../screens/SimulatorScreen';
@@ -76,6 +77,8 @@ function AnimatedTabButton(props: BottomTabBarButtonProps) {
 }
 
 export default function BottomTabNavigator() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 72 + insets.bottom;
   return (
     <Tab.Navigator
       screenOptions={{
@@ -84,7 +87,7 @@ export default function BottomTabNavigator() {
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
-          height: 88,
+          height: tabBarHeight,
           position: 'absolute',
           bottom: 0,
           left: 0,
@@ -102,7 +105,7 @@ export default function BottomTabNavigator() {
           >
             <View style={{
               position: 'absolute',
-              bottom: 20,
+              bottom: 8 + insets.bottom,
               left: 8,
               right: 8,
               top: 4,
