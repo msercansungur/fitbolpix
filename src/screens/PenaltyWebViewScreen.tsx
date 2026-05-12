@@ -10,6 +10,10 @@ import {
 } from 'react-native';
 import WebView, { WebViewMessageEvent } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import PenaltyTutorialModal from '../components/PenaltyTutorialModal';
+
+const TUTORIAL_KEY = 'penaltyTutorialSeen';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
@@ -289,6 +293,25 @@ export default function PenaltyWebViewScreen({ route }: Props) {
     }
   }, [gameLoading]);
 
+  // ── Tutorial modal — auto-show on first launch into the game ───────────
+  const [showTutorial, setShowTutorial] = useState(false);
+  useEffect(() => {
+    if (!gameStarted) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const seen = await AsyncStorage.getItem(TUTORIAL_KEY);
+        if (!cancelled && !seen) setShowTutorial(true);
+      } catch (_) {}
+    })();
+    return () => { cancelled = true; };
+  }, [gameStarted]);
+
+  const handleTutorialDismiss = useCallback(async () => {
+    setShowTutorial(false);
+    try { await AsyncStorage.setItem(TUTORIAL_KEY, 'true'); } catch (_) {}
+  }, []);
+
   // ── WebView message handler ────────────────────────────────────────────
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -408,6 +431,7 @@ export default function PenaltyWebViewScreen({ route }: Props) {
             </View>
           )}
         </View>
+        <PenaltyTutorialModal visible={showTutorial} onDismiss={handleTutorialDismiss} />
       </SafeAreaView>
     );
   }

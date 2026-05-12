@@ -23,8 +23,12 @@ import { cardGreen, cardTeal, cardRed } from '../theme/gradients';
 import { NATIONS, NATIONS_BY_ID } from '../constants/nations';
 import { Team } from '../types/simulator';
 import PixelFlag from '../components/PixelFlag';
+import PenaltyTutorialModal from '../components/PenaltyTutorialModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BottomTabParamList } from '../navigation/BottomTabNavigator';
 import { RootStackParamList } from '../navigation/RootNavigator';
+
+const TUTORIAL_KEY = 'penaltyTutorialSeen';
 
 // ─── Nav typing ───────────────────────────────────────────────────────────────
 type Nav = CompositeNavigationProp<
@@ -259,6 +263,13 @@ export default function PenaltyMenuScreen() {
   const [pickedAway,   setPickedAway]   = useState<string | null>(null);
   const [firstShooter, setFirstShooter] = useState<'home' | 'away'>('home');
 
+  // Tutorial modal — manual "How to play?" trigger
+  const [showTutorial, setShowTutorial] = useState(false);
+  const handleTutorialDismiss = useCallback(async () => {
+    setShowTutorial(false);
+    try { await AsyncStorage.setItem(TUTORIAL_KEY, 'true'); } catch (_) {}
+  }, []);
+
   // Bottom-sheet picker state
   const [pickerOpen,  setPickerOpen]  = useState(false);
   const [pickerSide,  setPickerSide]  = useState<'home' | 'away'>('home');
@@ -421,6 +432,17 @@ export default function PenaltyMenuScreen() {
           <Text style={styles.pageTitle}>PENALTIES</Text>
           <Text style={styles.pageSubtitle}>Choose your format</Text>
 
+          {/* How to play? link */}
+          <TouchableOpacity
+            style={styles.helpBtn}
+            onPress={() => setShowTutorial(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="How to play"
+          >
+            <Text style={styles.helpBtnText}>?  HOW TO PLAY?</Text>
+          </TouchableOpacity>
+
           {/* Mode cards */}
           <View style={styles.modeList}>
             <ModeCard
@@ -480,6 +502,7 @@ export default function PenaltyMenuScreen() {
             </View>
           </View>
         </ScrollView>
+        <PenaltyTutorialModal visible={showTutorial} onDismiss={handleTutorialDismiss} />
       </SafeAreaView>
     );
   }
@@ -761,7 +784,24 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     marginTop: 4,
+    marginBottom: SPACING[8],
+  },
+  helpBtn: {
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.small,
+    backgroundColor: COLORS.surface,
     marginBottom: SPACING[16],
+  },
+  helpBtnText: {
+    fontFamily: TYPOGRAPHY.fontHeading,
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    letterSpacing: 1.5,
+    fontWeight: '800',
   },
 
   // Top bar (shared by team_select + result)

@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 18.7.0",
+    "version": ">= 18.8.0",
     "appVersionSource": "remote"
   },
   "build": {
@@ -21,9 +21,9 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "YOUR_APPLE_ID_EMAIL",
-        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "YOUR_APPLE_TEAM_ID"
+        "appleId": "msercansungur@icloud.com",
+        "ascAppId": "6763310649",
+        "appleTeamId": "3M3YUW96ZV"
       },
       "android": {
         "serviceAccountKeyPath": "./play-service-account.json",

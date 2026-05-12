@@ -899,7 +899,7 @@ export default function SimulatorScreen({ route }: Props) {
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={{ flex: 1, paddingBottom: 40 + insets.bottom }}>
+            <View style={{ flex: 1, paddingBottom: 90 }}>
               <WebView
                 source={{ html: matchHtmlRef.current }}
                 onMessage={handleWebViewMessage}
@@ -2174,6 +2174,7 @@ const styles = StyleSheet.create({
   bottomBar: {
     flexDirection: 'row',
     padding: SPACING[12],
+    paddingBottom: 100,
     gap: SPACING[8],
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
