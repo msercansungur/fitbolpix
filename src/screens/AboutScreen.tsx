@@ -15,6 +15,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, PIXEL_SHADOW } from '../theme';
 import { cardGreen, cardRed } from '../theme/gradients';
 import { useTournamentStore } from '../store/useTournamentStore';
 import { useTournamentMatchStore } from '../store/useTournamentMatchStore';
+import OnboardingModal from '../components/OnboardingModal';
 
 const VERSION       = '1.0.0';
 const BUILD_LABEL   = 'build 2026.04';
@@ -127,6 +128,7 @@ function BackButton({ onPress }: { onPress: () => void }) {
 export default function AboutScreen() {
   const navigation = useNavigation();
   const [notif, setNotif] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const handleReset = () => {
     Alert.alert(
@@ -225,6 +227,12 @@ export default function AboutScreen() {
               onPress={() => Linking.openURL('mailto:' + CONTACT_EMAIL)}
               right={<Text style={styles.linkValue}>{CONTACT_EMAIL}</Text>}
             />
+            <DashedRowDivider />
+            <Row
+              label="Watch intro"
+              onPress={() => setShowOnboarding(true)}
+              right={<Text style={styles.linkValue}>›</Text>}
+            />
           </View>
         </View>
 
@@ -261,6 +269,7 @@ export default function AboutScreen() {
         <Text style={styles.footerBuild}>v{VERSION} · {BUILD_LABEL}</Text>
 
       </ScrollView>
+      <OnboardingModal visible={showOnboarding} onDismiss={() => setShowOnboarding(false)} />
     </SafeAreaView>
   );
 }
